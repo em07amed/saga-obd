@@ -33,7 +33,7 @@ jobs:
           cp -r src/lib src/test src/assets src/pubspec.yaml obd_saga/
           cp src/android/app/src/main/AndroidManifest.xml obd_saga/android/app/src/main/
           mkdir -p obd_saga/android/app/src/main/kotlin/com/ezzat/obd_saga
-          cp src/android/app/src/main/kotlin/com/ezzat/obd_saga/MainActivity.kt \
+          cp src/android/app/src/main/kotlin/com/ezzat/obd_saga/*.kt \
              obd_saga/android/app/src/main/kotlin/com/ezzat/obd_saga/
 
       - name: Get packages
