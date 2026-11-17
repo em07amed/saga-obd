@@ -19,7 +19,7 @@ class DashboardPage extends StatelessWidget {
         const ConnectionBar(),
         Expanded(
           child: ListenableBuilder(
-            listenable: Listenable.merge([obd, trips, settings]),
+            listenable: Listenable.merge([obd, trips, settings, App.maintenance]),
             builder: (context, _) {
               final v = obd.values;
 
@@ -95,6 +95,17 @@ class DashboardPage extends StatelessWidget {
                           'متوسط ${fmt(trips.avgL100, 1)} ل/100 • '
                           '${fmt(trips.fuelL * settings.fuelPrice)} ج.م'
                       : 'هتبدأ لوحدها لما الموتور يدور',
+                ),
+                StatTile(
+                  label: 'العداد',
+                  icon: Icons.av_timer,
+                  value: fmt(App.maintenance.odometerKm),
+                  unit: 'كم',
+                  sub: App.maintenance.odometerKm == null
+                      ? 'اكتب رقم التابلوه من تاب الصيانة'
+                      : App.maintenance.odometerFromObd
+                          ? 'من كمبيوتر العربية'
+                          : 'تقديري • بيزيد مع الرحلات',
                 ),
                 StatTile(
                   label: 'البطارية',

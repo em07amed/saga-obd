@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:intl/intl.dart' show DateFormat;
 
 import '../main.dart';
@@ -211,15 +213,8 @@ class TripDetailPage extends StatelessWidget {
                 const SizedBox(height: 8),
                 const Text('  خط السير (ملون بالسرعة)'),
                 Card(
-                  child: AspectRatio(
-                    aspectRatio: 1,
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: CustomPaint(
-                          painter: _RoutePainter(route,
-                              Theme.of(context).colorScheme.onSurface)),
-                    ),
-                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: SizedBox(height: 360, child: _RouteMap(route)),
                 ),
               ],
               if (samples.length > 1) ...[
@@ -248,49 +243,79 @@ class TripDetailPage extends StatelessWidget {
   }
 }
 
-/// Draws GPS points scaled to fit, coloured green→red by speed.
-class _RoutePainter extends CustomPainter {
+/// Real street map (OpenStreetMap) with the route coloured by speed.
+class _RouteMap extends StatelessWidget {
   final List<TripSample> pts;
-  final Color startColor;
-  _RoutePainter(this.pts, this.startColor);
+  const _RouteMap(this.pts);
+
+  static Color _speedColor(double? kmh) => Color.lerp(AppColors.routeSlow,
+      AppColors.routeFast, ((kmh ?? 0) / 120).clamp(0.0, 1.0))!;
 
   @override
-  void paint(Canvas canvas, Size size) {
-    var minLat = pts.first.lat!, maxLat = minLat;
-    var minLng = pts.first.lng!, maxLng = minLng;
-    for (final p in pts) {
-      minLat = math.min(minLat, p.lat!);
-      maxLat = math.max(maxLat, p.lat!);
-      minLng = math.min(minLng, p.lng!);
-      maxLng = math.max(maxLng, p.lng!);
-    }
-    // Longitude degrees shrink with latitude.
-    final kx = math.cos((minLat + maxLat) / 2 * math.pi / 180);
-    final w = math.max((maxLng - minLng) * kx, 1e-6);
-    final h = math.max(maxLat - minLat, 1e-6);
-    final scale = math.min(size.width / w, size.height / h);
-    final ox = (size.width - w * scale) / 2;
-    final oy = (size.height - h * scale) / 2;
+  Widget build(BuildContext context) {
+    final points = [for (final p in pts) LatLng(p.lat!, p.lng!)];
+    final dark = Theme.of(context).brightness == Brightness.dark;
 
-    Offset at(TripSample p) => Offset(
-          ox + (p.lng! - minLng) * kx * scale,
-          oy + (maxLat - p.lat!) * scale,
+    // One short polyline per segment so each can carry its own colour.
+    final segments = <Polyline>[
+      for (var i = 1; i < points.length; i++)
+        Polyline(
+          points: [points[i - 1], points[i]],
+          color: _speedColor(pts[i].speed),
+          strokeWidth: 5,
+        ),
+    ];
+
+    Widget pin(Color c, IconData icon) => Container(
+          decoration: BoxDecoration(
+            color: c,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2),
+          ),
+          child: Icon(icon, size: 16, color: Colors.white),
         );
 
-    final paint = Paint()
-      ..strokeWidth = 4
-      ..strokeCap = StrokeCap.round;
-    for (var i = 1; i < pts.length; i++) {
-      final t = ((pts[i].speed ?? 0.0) / 120).clamp(0.0, 1.0);
-      paint.color = Color.lerp(AppColors.routeSlow, AppColors.routeFast, t)!;
-      canvas.drawLine(at(pts[i - 1]), at(pts[i]), paint);
-    }
-    canvas.drawCircle(at(pts.first), 6, Paint()..color = startColor);
-    canvas.drawCircle(at(pts.last), 6, Paint()..color = AppColors.routeFast);
+    return FlutterMap(
+      options: MapOptions(
+        initialCameraFit: points.length > 1
+            ? CameraFit.bounds(
+                bounds: LatLngBounds.fromPoints(points),
+                padding: const EdgeInsets.all(32),
+              )
+            : null,
+        initialCenter: points.first,
+        initialZoom: 15,
+        interactionOptions: const InteractionOptions(
+          flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+        ),
+      ),
+      children: [
+        TileLayer(
+          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          userAgentPackageName: 'com.ezzat.obd_saga',
+          tileBuilder: dark ? darkModeTileBuilder : null,
+        ),
+        PolylineLayer(polylines: segments),
+        MarkerLayer(markers: [
+          Marker(
+            point: points.first,
+            width: 28,
+            height: 28,
+            child: pin(const Color(0xFF006A60), Icons.play_arrow),
+          ),
+          Marker(
+            point: points.last,
+            width: 28,
+            height: 28,
+            child: pin(AppColors.routeFast, Icons.flag),
+          ),
+        ]),
+        const SimpleAttributionWidget(
+          source: Text('OpenStreetMap contributors'),
+        ),
+      ],
+    );
   }
-
-  @override
-  bool shouldRepaint(_RoutePainter old) => old.pts != pts;
 }
 
 class _LinePainter extends CustomPainter {

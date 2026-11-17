@@ -90,8 +90,19 @@ class MaintenanceService extends ChangeNotifier {
   final TripRecorder trips;
 
   List<MaintenanceEntry> entries = [];
-  double? odometerKm;
-  bool odometerFromObd = false;
+  /// Dashboard reading + finished trips since then (null if never entered).
+  double? _estimateBase;
+
+  bool get odometerFromObd => (obd.values[Pids.odometer] ?? 0) > 0;
+
+  /// Live odometer: the car's own value when reported, otherwise the
+  /// estimate plus the trip in progress.
+  double? get odometerKm {
+    if (odometerFromObd) return obd.values[Pids.odometer];
+    final base = _estimateBase;
+    if (base == null) return null;
+    return base + (trips.active ? trips.distanceKm : 0);
+  }
 
   MaintenanceService(this.db, this.settings, this.obd, this.trips) {
     trips.addListener(_onTrips);
@@ -115,16 +126,10 @@ class MaintenanceService extends ChangeNotifier {
   /// Real odometer from OBD (PID A6) when the car reports it, otherwise the
   /// dashboard reading the user entered plus trips logged since then.
   Future<void> refreshOdometer() async {
-    final fromObd = obd.values[Pids.odometer];
-    if (fromObd != null && fromObd > 0) {
-      odometerKm = fromObd;
-      odometerFromObd = true;
-    } else if (settings.odoBaseKm != null && settings.odoBaseAt != null) {
-      final since = await db.kmSince(settings.odoBaseAt!);
-      odometerKm = settings.odoBaseKm! + since + (trips.active ? trips.distanceKm : 0);
-      odometerFromObd = false;
+    if (settings.odoBaseKm != null && settings.odoBaseAt != null) {
+      _estimateBase = settings.odoBaseKm! + await db.kmSince(settings.odoBaseAt!);
     } else {
-      odometerKm = null;
+      _estimateBase = null;
     }
     notifyListeners();
   }
@@ -137,9 +142,10 @@ class MaintenanceService extends ChangeNotifier {
           where: 'id = ?', whereArgs: [e.id]);
     }
     // Recording a service with a known km is also a fresh odometer reading.
+    final current = odometerKm;
     if (!odometerFromObd &&
         e.km != null &&
-        (odometerKm == null || e.km! > odometerKm!)) {
+        (current == null || e.km! > current)) {
       await settings.setOdometer(e.km!);
     }
     await load();
