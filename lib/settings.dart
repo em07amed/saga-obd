@@ -16,6 +16,7 @@ class AppSettings extends ChangeNotifier {
   bool autoConnect = true;
   String themeMode = 'sport'; // sport | system | light | dark
   String lang = 'ar'; // ar | en
+  bool alertsOn = true;
 
   /// Official Egypt pump prices (EGP/L) as of Nov 2026. Editable per vehicle
   /// because the pricing committee changes them periodically.
@@ -48,6 +49,7 @@ class AppSettings extends ChangeNotifier {
     autoConnect = _p.getBool('autoConnect') ?? true;
     themeMode = _p.getString('themeMode') ?? themeMode;
     lang = _p.getString('lang') ?? lang;
+    alertsOn = _p.getBool('alertsOn') ?? true;
     Lang.code = lang;
 
     vehicles = await db.vehicles();
@@ -118,6 +120,12 @@ class AppSettings extends ChangeNotifier {
     deviceAddress = address;
     await _p.setString('deviceName', name);
     await _p.setString('deviceAddress', address);
+    notifyListeners();
+  }
+
+  Future<void> setAlerts(bool v) async {
+    alertsOn = v;
+    await _p.setBool('alertsOn', v);
     notifyListeners();
   }
 

@@ -6,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import 'alerts.dart';
 import 'fuel/fuel_log.dart';
 import 'maintenance/maintenance.dart';
 import 'obd/bt_channel.dart';
@@ -29,6 +30,7 @@ class App {
   static late final TripRecorder trips;
   static late final MaintenanceService maintenance;
   static late final FuelLogService fuel;
+  static late final AlertService alerts;
 }
 
 Future<void> main() async {
@@ -46,6 +48,8 @@ Future<void> main() async {
   await App.maintenance.load();
   App.fuel = FuelLogService(App.db, App.settings, App.obd, App.trips);
   await App.fuel.load();
+  App.alerts =
+      AlertService(App.obd, App.settings, App.maintenance, App.obd.bt);
   runApp(CarObdApp());
 }
 

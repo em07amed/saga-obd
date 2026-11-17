@@ -83,6 +83,14 @@ class MainActivity : FlutterActivity() {
                         result.error("SERVICE", e.message, null)
                     }
                 }
+                "notify" -> {
+                    alert(
+                        call.argument<String>("title") ?: "",
+                        call.argument<String>("text") ?: "",
+                        call.argument<Boolean>("sound") ?: true
+                    )
+                    result.success(null)
+                }
                 "stopKeepAlive" -> {
                     ObdKeepAliveService.stop(this)
                     result.success(null)
@@ -185,6 +193,39 @@ class MainActivity : FlutterActivity() {
                 main.post { result.error("WRITE", e.message ?: e.toString(), null) }
             }
         }
+    }
+
+    private var alertId = 100
+
+    private fun alert(title: String, text: String, sound: Boolean) {
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        val channel = if (sound) "obd_alerts" else "obd_info"
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            nm.createNotificationChannel(
+                android.app.NotificationChannel(
+                    channel,
+                    if (sound) "Car alerts" else "Reminders",
+                    if (sound) android.app.NotificationManager.IMPORTANCE_HIGH
+                    else android.app.NotificationManager.IMPORTANCE_DEFAULT
+                ).apply { enableVibration(sound) }
+            )
+        }
+        val builder = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            android.app.Notification.Builder(this, channel)
+        } else {
+            @Suppress("DEPRECATION")
+            android.app.Notification.Builder(this).apply {
+                if (sound) setDefaults(android.app.Notification.DEFAULT_ALL)
+            }
+        }
+        val n = builder
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(android.app.Notification.BigTextStyle().bigText(text))
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setAutoCancel(true)
+            .build()
+        try { nm.notify(alertId++, n) } catch (_: SecurityException) {}
     }
 
     private fun closeSocket() {

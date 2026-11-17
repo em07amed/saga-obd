@@ -40,4 +40,9 @@ class BtChannel {
       .invokeMethod('startKeepAlive', {'title': title, 'text': text});
 
   Future<void> stopKeepAlive() => _method.invokeMethod('stopKeepAlive');
+
+  /// High-priority notification (heads-up, sound, vibration).
+  Future<void> notify(String title, String text, {bool sound = true}) =>
+      _method.invokeMethod(
+          'notify', {'title': title, 'text': text, 'sound': sound});
 }

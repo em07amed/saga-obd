@@ -45,6 +45,13 @@ class SettingsPage extends StatelessWidget {
               onSelectionChanged: (sel) => s.setThemeMode(sel.first),
             ),
           ),
+          SwitchListTile(
+            secondary: Icon(Icons.notifications_active_outlined),
+            title: Text(tr('تنبيهات وإنت سايق')),
+            subtitle: Text(tr('الحرارة، الشحن، الأعطال، مواعيد الصيانة')),
+            value: s.alertsOn,
+            onChanged: s.setAlerts,
+          ),
           _Header(tr('اللغة')),
           Padding(
             padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),

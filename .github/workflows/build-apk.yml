@@ -8,6 +8,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -58,3 +60,18 @@ jobs:
         with:
           name: saga-obd-apk
           path: obd_saga/build/app/outputs/flutter-apk/app-release.apk
+
+      # Every build on main becomes the "latest" release, so the APK has a
+      # stable download link: /releases/latest
+      - name: Publish release
+        if: github.ref == 'refs/heads/main'
+        run: cp obd_saga/build/app/outputs/flutter-apk/app-release.apk car-obd.apk
+
+      - uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main'
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Car OBD build ${{ github.run_number }}
+          body: ${{ github.event.head_commit.message }}
+          files: car-obd.apk
+          make_latest: true

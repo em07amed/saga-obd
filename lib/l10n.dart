@@ -391,4 +391,20 @@ const Map<String, String> _en = {
   'اللترات': 'Litres',
   'المبلغ': 'Amount',
   'بيسجّل الرحلة والقراءات': 'Recording trip and readings',
+
+  // ---- alerts ----
+  'حرارة الموتور عالية': 'Engine temperature high',
+  'اركن وطفي التكييف.': 'Pull over and turn off the A/C.',
+  'مشكلة في الشحن': 'Charging problem',
+  'والموتور شغال. افحص الدينامو.': 'with the engine running. Check the alternator.',
+  'فولت عالي': 'High voltage',
+  'افحص منظم الدينامو.': 'Check the alternator regulator.',
+  'عطل جديد': 'New trouble code',
+  'الكمبيوتر سجّل': 'The ECU stored',
+  'افتح القراءات ← الأعطال.': 'Open Readings → Trouble codes.',
+  'ميعاد صيانة': 'Service due',
+  'قرّب': 'due soon',
+  'فات ميعاده': 'past due',
+  'تنبيهات وإنت سايق': 'Driving alerts',
+  'الحرارة، الشحن، الأعطال، مواعيد الصيانة': 'Temperature, charging, trouble codes, services',
 };
