@@ -24,6 +24,14 @@ class ObdSample {
       this.fuelLevelPct);
 }
 
+class ProbeResult {
+  final String label;
+  final String cmd;
+  final String raw;
+  final double? km;
+  const ProbeResult(this.label, this.cmd, this.raw, this.km);
+}
+
 class ObdService extends ChangeNotifier {
   final BtChannel bt;
   final AppSettings settings;
@@ -227,6 +235,64 @@ class ObdService extends ChangeNotifier {
     } catch (_) {
       _consecutiveErrors++;
     }
+  }
+
+  // ---------- odometer probe ----------
+
+  /// Tries the known ways an ECU may expose total distance and returns the
+  /// raw replies, so an unsupported car still tells us what it answered.
+  Future<List<ProbeResult>> probeOdometer() async {
+    final out = <ProbeResult>[];
+
+    Future<String> ask(String cmd) async {
+      try {
+        return await elm.send(cmd, timeout: const Duration(seconds: 3));
+      } catch (e) {
+        return 'ERR: $e';
+      }
+    }
+
+    // 1) SAE J1979 PID A6 (odometer, 0.1 km).
+    var raw = await ask('01A6');
+    var b = Elm327.mode01Bytes(raw, 0xA6);
+    out.add(ProbeResult('PID 01A6 (العداد القياسي)', '01A6', raw,
+        b.isNotEmpty && b.first.length >= 4 ? _u32(b.first) / 10 : null));
+
+    // 2) ISO 27145 / UDS DID F4A6 (same value over service 22).
+    raw = await ask('22F4A6');
+    var d = _did(raw, 'F4A6');
+    out.add(ProbeResult('UDS DID F4A6', '22F4A6', raw,
+        d != null && d.length >= 4 ? _u32(d) / 10 : null));
+
+    // 3) DID DD01, used by several manufacturers for total distance (km).
+    raw = await ask('22DD01');
+    d = _did(raw, 'DD01');
+    out.add(ProbeResult('UDS DID DD01', '22DD01', raw,
+        d != null && d.length >= 3
+            ? (d[0] * 65536 + d[1] * 256 + d[2]).toDouble()
+            : null));
+
+    // Context: distance since codes cleared (almost always supported).
+    raw = await ask('0131');
+    b = Elm327.mode01Bytes(raw, 0x31);
+    out.add(ProbeResult('مسافة من مسح الأعطال (مش العداد)', '0131', raw,
+        b.isNotEmpty && b.first.length >= 2
+            ? (b.first[0] * 256 + b.first[1]).toDouble()
+            : null));
+    return out;
+  }
+
+  static int _u32(List<int> d) =>
+      d[0] * 16777216 + d[1] * 65536 + d[2] * 256 + d[3];
+
+  /// Data bytes of a positive service-22 reply ("62" + DID + data), or null
+  /// for a negative reply ("7F22..") / no data.
+  static List<int>? _did(String raw, String did) {
+    for (final frame in _joinFrames(raw)) {
+      final i = frame.indexOf('62$did');
+      if (i >= 0) return Elm327.hexToBytes(frame.substring(i + 6));
+    }
+    return null;
   }
 
   // ---------- trouble codes ----------

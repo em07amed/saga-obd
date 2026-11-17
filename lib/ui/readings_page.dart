@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../main.dart';
+import '../obd/obd_service.dart';
 import '../obd/pids.dart';
 import 'widgets.dart';
 
@@ -21,7 +23,16 @@ class ReadingsPage extends StatelessWidget {
             title: Text('${obd.supported.length} قراءة مدعومة'),
             subtitle: Text(
                 'بروتوكول ${obd.protocol.isEmpty ? '—' : obd.protocol} • ${obd.adapterVersion}'),
-            trailing: FilledButton.tonalIcon(
+            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+              IconButton(
+                tooltip: 'فحص العداد',
+                onPressed: obd.isConnected
+                    ? () => Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => const OdometerProbePage()))
+                    : null,
+                icon: const Icon(Icons.speed),
+              ),
+              FilledButton.tonalIcon(
               onPressed: obd.isConnected
                   ? () => Navigator.of(context).push(MaterialPageRoute(
                       builder: (_) => const DtcPage()))
@@ -29,6 +40,7 @@ class ReadingsPage extends StatelessWidget {
               icon: const Icon(Icons.warning_amber),
               label: const Text('الأعطال'),
             ),
+            ]),
           ),
         ),
         const Divider(height: 1),
@@ -204,5 +216,94 @@ class _DtcPageState extends State<DtcPage> {
     };
     final generic = code.length > 1 && code[1] == '0' ? 'كود عام (SAE)' : 'كود خاص بالشركة';
     return '$system • $generic — ابحث عن الكود لمعرفة التفاصيل';
+  }
+}
+
+class OdometerProbePage extends StatefulWidget {
+  const OdometerProbePage({super.key});
+
+  @override
+  State<OdometerProbePage> createState() => _OdometerProbePageState();
+}
+
+class _OdometerProbePageState extends State<OdometerProbePage> {
+  List<ProbeResult>? _results;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _run();
+  }
+
+  Future<void> _run() async {
+    setState(() => _busy = true);
+    final r = await App.obd.probeOdometer();
+    if (mounted) {
+      setState(() {
+        _results = r;
+        _busy = false;
+      });
+    }
+  }
+
+  String get _report => (_results ?? [])
+      .map((r) => '${r.cmd} → ${r.raw.replaceAll('\n', ' | ')}')
+      .join('\n');
+
+  @override
+  Widget build(BuildContext context) {
+    final results = _results;
+    final found = results?.where((r) => r.km != null && r.cmd != '0131');
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('فحص العداد'),
+        actions: [
+          IconButton(
+            tooltip: 'نسخ النتيجة',
+            onPressed: results == null
+                ? null
+                : () {
+                    Clipboard.setData(ClipboardData(text: _report));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('اتنسخت')));
+                  },
+            icon: const Icon(Icons.copy),
+          ),
+          IconButton(
+              onPressed: _busy ? null : _run,
+              icon: const Icon(Icons.refresh)),
+        ],
+      ),
+      body: results == null
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.all(12),
+              children: [
+                Card(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  child: ListTile(
+                    title: Text(found != null && found.isNotEmpty
+                        ? 'العداد: ${fmt(found.first.km, 1)} كم'
+                        : 'العربية ما ردتش بقراءة العداد بالطرق القياسية'),
+                    subtitle: const Text(
+                        'قارن الرقم بعداد التابلوه. لو مفيش نتيجة، انسخ الردود وابعتها.'),
+                  ),
+                ),
+                for (final r in results)
+                  Card(
+                    child: ListTile(
+                      title: Text(r.label),
+                      subtitle: Text('${r.cmd}\n${r.raw.isEmpty ? '(فاضي)' : r.raw}',
+                          textDirection: TextDirection.ltr),
+                      isThreeLine: true,
+                      trailing: Text(
+                          r.km == null ? 'مش مدعوم' : '${fmt(r.km, 1)} كم',
+                          style: Theme.of(context).textTheme.titleMedium),
+                    ),
+                  ),
+              ],
+            ),
+    );
   }
 }
