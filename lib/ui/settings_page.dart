@@ -16,6 +16,28 @@ class SettingsPage extends StatelessWidget {
       listenable: s,
       builder: (context, _) => ListView(
         children: [
+          const _Header('المظهر'),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(
+                    value: 'system',
+                    label: Text('تلقائي'),
+                    icon: Icon(Icons.brightness_auto)),
+                ButtonSegment(
+                    value: 'light',
+                    label: Text('فاتح'),
+                    icon: Icon(Icons.light_mode)),
+                ButtonSegment(
+                    value: 'dark',
+                    label: Text('داكن'),
+                    icon: Icon(Icons.dark_mode)),
+              ],
+              selected: {s.themeMode},
+              onSelectionChanged: (sel) => s.setThemeMode(sel.first),
+            ),
+          ),
           const _Header('جهاز الـ OBD'),
           ListTile(
             leading: const Icon(Icons.bluetooth_searching),

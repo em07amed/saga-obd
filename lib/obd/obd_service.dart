@@ -47,6 +47,26 @@ class ObdService extends ChangeNotifier {
 
   /// Latest decoded value per PID.
   final Map<int, double> values = {};
+
+  /// Latest raw data bytes per PID (for text-valued and unknown PIDs).
+  final Map<int, List<int>> rawBytes = {};
+
+  /// Vehicle identification number, if the ECU reports it (Mode 09).
+  String? vin;
+
+  /// Definition for [pid]; supported PIDs without a formula get a raw one.
+  PidDef defFor(int pid) => Pids.byId[pid] ?? PidDef.unknown(pid);
+
+  /// Every supported PID except the range markers (0x20, 0x40, ...).
+  List<PidDef> get supportedDefs {
+    final known = Pids.all.where((p) => supported.contains(p.pid));
+    final unknown = (supported
+            .where((id) => !Pids.byId.containsKey(id) && id % 0x20 != 0)
+            .toList()
+          ..sort())
+        .map(PidDef.unknown);
+    return [...known, ...unknown];
+  }
   DateTime? lastUpdate;
 
   FuelSource fuelSource = FuelSource.none;
@@ -96,6 +116,7 @@ class ObdService extends ChangeNotifier {
       adapterVersion = await elm.init();
       await _discoverSupported();
       protocol = await elm.send('ATDPN').catchError((_) => '');
+      vin = await _readVin();
       fuelSource = FuelCalc.sourceFor(supported);
 
       if (supported.isEmpty) {
@@ -165,9 +186,9 @@ class ObdService extends ChangeNotifier {
 
   List<int> get _slowPids {
     final fast = _fastPids.toSet();
-    return Pids.all
+    return supportedDefs
         .map((p) => p.pid)
-        .where((id) => supported.contains(id) && !fast.contains(id))
+        .where((id) => !fast.contains(id))
         .toList();
   }
 
@@ -219,8 +240,7 @@ class ObdService extends ChangeNotifier {
   }
 
   Future<void> _poll(int pid) async {
-    final def = Pids.byId[pid];
-    if (def == null) return;
+    final def = defFor(pid);
     try {
       final resp = await elm.send(def.hex);
       final answers = Elm327.mode01Bytes(resp, pid);
@@ -228,6 +248,7 @@ class ObdService extends ChangeNotifier {
         _consecutiveErrors++;
         return;
       }
+      rawBytes[pid] = answers.first;
       values[pid] = def.decode(answers.first);
       _consecutiveErrors = 0;
     } on ElmTimeout {
@@ -235,6 +256,27 @@ class ObdService extends ChangeNotifier {
     } catch (_) {
       _consecutiveErrors++;
     }
+  }
+
+  // ---------- VIN ----------
+
+  Future<String?> _readVin() async {
+    try {
+      final resp = await elm.send('0902', timeout: const Duration(seconds: 4));
+      if (Elm327.isError(resp)) return null;
+      for (final frame in _joinFrames(resp)) {
+        final i = frame.indexOf('4902');
+        if (i < 0) continue;
+        final bytes = Elm327.hexToBytes(frame.substring(i + 4));
+        final chars = bytes
+            .where((b) => b >= 0x30 && b <= 0x5A) // 0-9, A-Z
+            .map(String.fromCharCode)
+            .join();
+        if (chars.length >= 17) return chars.substring(chars.length - 17);
+        if (chars.isNotEmpty) return chars;
+      }
+    } catch (_) {}
+    return null;
   }
 
   // ---------- odometer probe ----------

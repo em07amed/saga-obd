@@ -5,11 +5,16 @@ import 'package:flutter/material.dart';
 import '../main.dart';
 import '../obd/obd_service.dart';
 
-/// Colours chosen for contrast on a white background.
+/// Status colours with enough contrast in both light and dark themes.
 class AppColors {
-  static const danger = Color(0xFFC62828);
-  static const warning = Color(0xFF9A5B00);
-  static const ok = Color(0xFF1E7A34);
+  static bool _dark(BuildContext c) =>
+      Theme.of(c).brightness == Brightness.dark;
+  static Color danger(BuildContext c) =>
+      _dark(c) ? const Color(0xFFFF8A80) : const Color(0xFFC62828);
+  static Color warning(BuildContext c) =>
+      _dark(c) ? const Color(0xFFFFB870) : const Color(0xFF9A5B00);
+  static Color ok(BuildContext c) =>
+      _dark(c) ? const Color(0xFF7BD88F) : const Color(0xFF1E7A34);
   static const routeSlow = Color(0xFF2E9E4A);
   static const routeFast = Color(0xFFD32F2F);
 }
@@ -37,9 +42,9 @@ class ConnectionBar extends StatelessWidget {
         final busy = obd.state == ObdState.connecting ||
             obd.state == ObdState.initializing;
         final color = switch (obd.state) {
-          ObdState.connected => AppColors.ok,
+          ObdState.connected => AppColors.ok(context),
           ObdState.disconnected => scheme.error,
-          _ => AppColors.warning,
+          _ => AppColors.warning(context),
         };
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -110,7 +115,8 @@ class Gauge extends StatelessWidget {
                   redFraction:
                       redFrom == null ? null : (redFrom! - min) / (max - min),
                   track: scheme.outlineVariant,
-                  fill: hot ? AppColors.danger : scheme.primary,
+                  fill: hot ? AppColors.danger(context) : scheme.primary,
+                  danger: AppColors.danger(context),
                 ),
                 child: Center(
                   child: Column(
@@ -121,7 +127,7 @@ class Gauge extends StatelessWidget {
                             style: TextStyle(
                                 fontSize: 34,
                                 fontWeight: FontWeight.bold,
-                                color: hot ? AppColors.danger : null)),
+                                color: hot ? AppColors.danger(context) : null)),
                       ),
                       Text(unit, style: Theme.of(context).textTheme.bodySmall),
                     ],
@@ -141,12 +147,14 @@ class _GaugePainter extends CustomPainter {
   final double? redFraction;
   final Color track;
   final Color fill;
+  final Color danger;
 
   _GaugePainter({
     required this.fraction,
     required this.redFraction,
     required this.track,
     required this.fill,
+    required this.danger,
   });
 
   static const _start = math.pi * 150 / 180;
@@ -165,7 +173,7 @@ class _GaugePainter extends CustomPainter {
     final rf = redFraction;
     if (rf != null && rf < 1) {
       canvas.drawArc(rect, _start + _sweep * rf, _sweep * (1 - rf), false,
-          base..color = AppColors.danger.withValues(alpha: 0.25));
+          base..color = danger.withValues(alpha: 0.25));
     }
     if (fraction > 0) {
       canvas.drawArc(

@@ -8,6 +8,11 @@ class AppSettings extends ChangeNotifier {
   String? deviceAddress;
   String? deviceName;
   bool autoConnect = true;
+  String themeMode = 'system'; // system | light | dark
+
+  /// Odometer as read off the dashboard by the user, and when.
+  double? odoBaseKm;
+  DateTime? odoBaseAt;
 
   double tankLiters = 40;
   double displacementL = 1.332;
@@ -24,6 +29,10 @@ class AppSettings extends ChangeNotifier {
     deviceAddress = _p.getString('deviceAddress');
     deviceName = _p.getString('deviceName');
     autoConnect = _p.getBool('autoConnect') ?? true;
+    themeMode = _p.getString('themeMode') ?? themeMode;
+    odoBaseKm = _p.getDouble('odoBaseKm');
+    final at = _p.getInt('odoBaseAt');
+    odoBaseAt = at == null ? null : DateTime.fromMillisecondsSinceEpoch(at);
     tankLiters = _p.getDouble('tankLiters') ?? tankLiters;
     displacementL = _p.getDouble('displacementL') ?? displacementL;
     volumetricEff = _p.getDouble('volumetricEff') ?? volumetricEff;
@@ -46,6 +55,20 @@ class AppSettings extends ChangeNotifier {
     fuelPrice = gradePrices[grade] ?? fuelPrice;
     await _p.setString('fuelGrade', grade);
     await _p.setDouble('fuelPrice', fuelPrice);
+    notifyListeners();
+  }
+
+  Future<void> setOdometer(double km) async {
+    odoBaseKm = km;
+    odoBaseAt = DateTime.now();
+    await _p.setDouble('odoBaseKm', km);
+    await _p.setInt('odoBaseAt', odoBaseAt!.millisecondsSinceEpoch);
+    notifyListeners();
+  }
+
+  Future<void> setThemeMode(String mode) async {
+    themeMode = mode;
+    await _p.setString('themeMode', mode);
     notifyListeners();
   }
 

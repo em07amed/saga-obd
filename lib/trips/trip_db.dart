@@ -77,7 +77,10 @@ class TripDb {
 
   Future<void> open() async {
     final path = p.join(await getDatabasesPath(), 'trips.db');
-    _db = await openDatabase(path, version: 1, onCreate: (db, _) async {
+    _db = await openDatabase(path, version: 2,
+        onUpgrade: (db, oldV, newV) async {
+      if (oldV < 2) await _createMaintenance(db);
+    }, onCreate: (db, _) async {
       await db.execute('''
         CREATE TABLE trips(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -100,8 +103,33 @@ class TripDb {
           lat REAL, lng REAL
         )''');
       await db.execute('CREATE INDEX idx_samples_trip ON samples(trip_id)');
+      await _createMaintenance(db);
     });
     await _closeDanglingTrips();
+  }
+
+  static Future<void> _createMaintenance(Database db) => db.execute('''
+        CREATE TABLE maintenance(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          date INTEGER NOT NULL,
+          km REAL,
+          type TEXT NOT NULL,
+          cost REAL NOT NULL DEFAULT 0,
+          notes TEXT,
+          next_km REAL,
+          next_date INTEGER
+        )''');
+
+  Database get raw => _db;
+
+  /// Sum of trip distances that started at or after [since].
+  Future<double> kmSince(DateTime since) async {
+    final rows = await _db.query('trips',
+        where: 'started_at >= ? AND ended_at IS NOT NULL',
+        whereArgs: [since.millisecondsSinceEpoch]);
+    return rows
+        .map(Trip.fromRow)
+        .fold<double>(0, (s, t) => s + t.distanceKm);
   }
 
   /// Trips left open by a crash/kill get closed at their last sample.

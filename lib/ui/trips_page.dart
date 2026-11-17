@@ -215,7 +215,9 @@ class TripDetailPage extends StatelessWidget {
                     aspectRatio: 1,
                     child: Padding(
                       padding: const EdgeInsets.all(12),
-                      child: CustomPaint(painter: _RoutePainter(route)),
+                      child: CustomPaint(
+                          painter: _RoutePainter(route,
+                              Theme.of(context).colorScheme.onSurface)),
                     ),
                   ),
                 ),
@@ -249,7 +251,8 @@ class TripDetailPage extends StatelessWidget {
 /// Draws GPS points scaled to fit, coloured green→red by speed.
 class _RoutePainter extends CustomPainter {
   final List<TripSample> pts;
-  _RoutePainter(this.pts);
+  final Color startColor;
+  _RoutePainter(this.pts, this.startColor);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -282,7 +285,7 @@ class _RoutePainter extends CustomPainter {
       paint.color = Color.lerp(AppColors.routeSlow, AppColors.routeFast, t)!;
       canvas.drawLine(at(pts[i - 1]), at(pts[i]), paint);
     }
-    canvas.drawCircle(at(pts.first), 6, Paint()..color = const Color(0xFF171D1B));
+    canvas.drawCircle(at(pts.first), 6, Paint()..color = startColor);
     canvas.drawCircle(at(pts.last), 6, Paint()..color = AppColors.routeFast);
   }
 
@@ -317,7 +320,7 @@ class _LinePainter extends CustomPainter {
     final tp = TextPainter(
       text: TextSpan(
           text: '${maxV.toStringAsFixed(0)} كم/س',
-          style: const TextStyle(fontSize: 11, color: Color(0xFF4A5552))),
+          style: TextStyle(fontSize: 11, color: color)),
       textDirection: TextDirection.rtl,
     )..layout();
     tp.paint(canvas, Offset.zero);

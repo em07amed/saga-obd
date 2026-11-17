@@ -20,7 +20,7 @@ class ReadingsPage extends StatelessWidget {
           listenable: obd,
           builder: (context, _) => ListTile(
             dense: true,
-            title: Text('${obd.supported.length} قراءة مدعومة'),
+            title: Text('${obd.supportedDefs.length} قراءة مدعومة'),
             subtitle: Text(
                 'بروتوكول ${obd.protocol.isEmpty ? '—' : obd.protocol} • ${obd.adapterVersion}'),
             trailing: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -48,34 +48,32 @@ class ReadingsPage extends StatelessWidget {
           child: ListenableBuilder(
             listenable: obd,
             builder: (context, _) {
-              final defs =
-                  Pids.all.where((p) => obd.supported.contains(p.pid)).toList();
-              final unknown = obd.supported
-                  .where((id) => !Pids.byId.containsKey(id) && id % 0x20 != 0)
-                  .toList()
-                ..sort();
+              final defs = obd.supportedDefs;
               if (defs.isEmpty) {
                 return const Center(
                     child: Text('اتصل بالعربية عشان تظهر القراءات'));
               }
               return ListView(
                 children: [
+                  if (obd.vin != null)
+                    ListTile(
+                      leading: const Icon(Icons.badge_outlined),
+                      title: const Text('رقم الشاسيه (VIN)'),
+                      subtitle: Text(obd.vin!,
+                          textDirection: TextDirection.ltr),
+                    ),
                   for (final d in defs)
                     ListTile(
                       title: Text(d.name),
                       subtitle: Text(d.hex),
-                      trailing: Text(
-                        '${fmt(obd.values[d.pid], d.decimals)} ${d.unit}',
-                        style: Theme.of(context).textTheme.titleMedium,
+                      trailing: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 190),
+                        child: Text(
+                          _valueText(obd, d),
+                          textAlign: TextAlign.end,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
                       ),
-                    ),
-                  if (unknown.isNotEmpty)
-                    ListTile(
-                      title: const Text('PIDs مدعومة من غير معادلة في التطبيق'),
-                      subtitle: Text(unknown
-                          .map((e) =>
-                              '01${e.toRadixString(16).padLeft(2, '0').toUpperCase()}')
-                          .join('  ')),
                     ),
                 ],
               );
@@ -84,6 +82,13 @@ class ReadingsPage extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  static String _valueText(ObdService obd, PidDef d) {
+    final raw = obd.rawBytes[d.pid];
+    if (raw == null) return '…';
+    if (d.text != null) return d.text!(raw);
+    return '${fmt(obd.values[d.pid], d.decimals)} ${d.unit}'.trim();
   }
 }
 
@@ -174,9 +179,9 @@ class _DtcPageState extends State<DtcPage> {
                           leading: const Icon(Icons.error_outline),
                           title: Text(_error!))),
                 if (codes != null && codes.isEmpty)
-                  const Card(
+                  Card(
                     child: ListTile(
-                      leading: Icon(Icons.check_circle, color: AppColors.ok),
+                      leading: Icon(Icons.check_circle, color: AppColors.ok(context)),
                       title: Text('مفيش أعطال مخزنة'),
                     ),
                   ),
@@ -184,8 +189,8 @@ class _DtcPageState extends State<DtcPage> {
                   for (final c in codes)
                     Card(
                       child: ListTile(
-                        leading: const Icon(Icons.warning_amber,
-                            color: AppColors.warning),
+                        leading: Icon(Icons.warning_amber,
+                            color: AppColors.warning(context)),
                         title: Text(c,
                             style: const TextStyle(
                                 fontSize: 22, fontWeight: FontWeight.bold)),
@@ -196,7 +201,7 @@ class _DtcPageState extends State<DtcPage> {
                 if (codes != null && codes.isNotEmpty)
                   FilledButton.icon(
                     style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.danger,
+                        backgroundColor: AppColors.danger(context),
                         foregroundColor: Colors.white),
                     onPressed: _busy ? null : _clear,
                     icon: const Icon(Icons.delete_forever),
