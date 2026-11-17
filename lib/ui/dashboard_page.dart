@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../main.dart';
 import '../obd/fuel.dart';
 import '../obd/pids.dart';
+import 'drive_mode_page.dart';
 import 'widgets.dart';
 
 class DashboardPage extends StatelessWidget {
@@ -14,7 +15,8 @@ class DashboardPage extends StatelessWidget {
     final trips = App.trips;
     final settings = App.settings;
 
-    return Column(
+    return Stack(children: [
+      Column(
       children: [
         const ConnectionBar(),
         Expanded(
@@ -141,7 +143,7 @@ class DashboardPage extends StatelessWidget {
                         ? 4
                         : 2;
                 return GridView.count(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 88),
                   crossAxisCount: cols,
                   childAspectRatio: 1.05,
                   children: tiles,
@@ -151,6 +153,18 @@ class DashboardPage extends StatelessWidget {
           ),
         ),
       ],
-    );
+    ),
+      PositionedDirectional(
+        end: 16,
+        bottom: 16,
+        child: FloatingActionButton.extended(
+          heroTag: 'drive',
+          onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const DriveModePage())),
+          icon: const Icon(Icons.directions_car),
+          label: const Text('وضع القيادة'),
+        ),
+      ),
+    ]);
   }
 }
