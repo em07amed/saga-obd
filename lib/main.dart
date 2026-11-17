@@ -5,8 +5,8 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:wakelock_plus/wakelock_plus.dart';
 
+import 'fuel/fuel_log.dart';
 import 'maintenance/maintenance.dart';
 import 'obd/bt_channel.dart';
 import 'obd/obd_service.dart';
@@ -28,6 +28,7 @@ class App {
   static late final TripDb db;
   static late final TripRecorder trips;
   static late final MaintenanceService maintenance;
+  static late final FuelLogService fuel;
 }
 
 Future<void> main() async {
@@ -43,6 +44,8 @@ Future<void> main() async {
   App.maintenance =
       MaintenanceService(App.db, App.settings, App.obd, App.trips);
   await App.maintenance.load();
+  App.fuel = FuelLogService(App.db, App.settings, App.obd, App.trips);
+  await App.fuel.load();
   runApp(CarObdApp());
 }
 
@@ -110,7 +113,7 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   Future<void> _startup() async {
-    await [Permission.bluetoothConnect].request();
+    await [Permission.bluetoothConnect, Permission.notification].request();
     final loc = await Geolocator.checkPermission();
     if (loc == LocationPermission.denied) {
       await Geolocator.requestPermission();
@@ -120,9 +123,21 @@ class _HomeShellState extends State<HomeShell> {
     }
   }
 
+  bool _keepAlive = false;
+
+  /// While connected, run a foreground service so polling and trip logging
+  /// continue with the screen off or another app in front.
   void _keepScreenOn() {
-    // Keep the display awake while connected so polling/trip logging continue.
-    WakelockPlus.toggle(enable: App.obd.state != ObdState.disconnected);
+    final want = App.obd.state == ObdState.connected;
+    if (want == _keepAlive) return;
+    _keepAlive = want;
+    if (want) {
+      App.obd.bt
+          .startKeepAlive('Car OBD', tr('بيسجّل الرحلة والقراءات'))
+          .catchError((_) {});
+    } else {
+      App.obd.bt.stopKeepAlive().catchError((_) {});
+    }
   }
 
   @override

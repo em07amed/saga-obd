@@ -79,9 +79,10 @@ class TripDb {
 
   Future<void> open() async {
     final path = p.join(await getDatabasesPath(), 'trips.db');
-    _db = await openDatabase(path, version: 3,
+    _db = await openDatabase(path, version: 4,
         onUpgrade: (db, oldV, newV) async {
       if (oldV < 2) await _createMaintenance(db); // already has vehicle_id
+      if (oldV < 4) await _createFillups(db);
       if (oldV < 3) {
         await _createVehicles(db);
         await db.execute('ALTER TABLE trips ADD COLUMN vehicle_id INTEGER');
@@ -92,6 +93,7 @@ class TripDb {
       }
     }, onCreate: (db, _) async {
       await _createVehicles(db);
+      await _createFillups(db);
       await db.execute('''
         CREATE TABLE trips(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -185,6 +187,34 @@ class TripDb {
     return rows
         .map(Trip.fromRow)
         .fold<double>(0, (s, t) => s + t.distanceKm);
+  }
+
+  static Future<void> _createFillups(Database db) => db.execute('''
+        CREATE TABLE fillups(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          vehicle_id INTEGER,
+          date INTEGER NOT NULL,
+          litres REAL NOT NULL,
+          cost REAL NOT NULL DEFAULT 0,
+          full INTEGER NOT NULL DEFAULT 1
+        )''');
+
+  /// Fuel and distance of finished trips in [from, to) for a vehicle.
+  Future<({double fuel, double km})> tripTotals(
+      int vehicleId, DateTime from, [DateTime? to]) async {
+    final rows = await _db.query('trips',
+        where: 'vehicle_id = ? AND ended_at IS NOT NULL AND started_at >= ?'
+            '${to == null ? '' : ' AND started_at < ?'}',
+        whereArgs: [
+          vehicleId,
+          from.millisecondsSinceEpoch,
+          if (to != null) to.millisecondsSinceEpoch,
+        ]);
+    final trips = rows.map(Trip.fromRow);
+    return (
+      fuel: trips.fold<double>(0, (s, t) => s + t.fuelL),
+      km: trips.fold<double>(0, (s, t) => s + t.distanceKm),
+    );
   }
 
   /// Trips left open by a crash/kill get closed at their last sample.

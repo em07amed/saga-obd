@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../main.dart';
 import '../obd/pids.dart';
@@ -22,12 +23,14 @@ class _DriveModePageState extends State<DriveModePage> {
     SystemChrome.setPreferredOrientations(
         [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    WakelockPlus.enable(); // screen stays on only in drive mode
   }
 
   @override
   void dispose() {
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    WakelockPlus.disable();
     super.dispose();
   }
 
@@ -41,14 +44,14 @@ class _DriveModePageState extends State<DriveModePage> {
     return Scaffold(
       body: SafeArea(
         child: ListenableBuilder(
-          listenable: Listenable.merge([obd, trips, App.maintenance]),
+          listenable: Listenable.merge([obd, trips, App.maintenance, App.fuel]),
           builder: (context, _) {
             final v = obd.values;
             final rpm = v[Pids.rpm];
             final coolant = v[Pids.coolant];
-            final level = v[Pids.fuelLevel];
-            final litres = level == null ? null : level / 100 * s.tankLiters;
-            final avg = trips.avgL100 ?? s.defaultL100;
+            final litres = App.fuel.litresNow;
+            final level = litres == null ? null : litres / s.tankLiters * 100;
+            final avg = App.fuel.realAvgL100 ?? trips.avgL100 ?? s.defaultL100;
             final range = litres == null ? null : litres / avg * 100;
             final hot = coolant != null && coolant >= 105;
             final redline = rpm != null && rpm >= 6000;

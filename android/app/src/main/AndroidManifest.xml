@@ -12,6 +12,12 @@
 
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- Keep recording trips with the screen off -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <!-- Map tiles for trip routes -->
     <uses-permission android:name="android.permission.INTERNET" />
 
@@ -38,6 +44,10 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <service
+            android:name=".ObdKeepAliveService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice|location" />
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />

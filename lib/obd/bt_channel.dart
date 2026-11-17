@@ -34,4 +34,10 @@ class BtChannel {
       _method.invokeMethod('write', {'data': data});
 
   Future<void> disconnect() => _method.invokeMethod('disconnect');
+
+  /// Foreground service that keeps logging alive with the screen off.
+  Future<void> startKeepAlive(String title, String text) => _method
+      .invokeMethod('startKeepAlive', {'title': title, 'text': text});
+
+  Future<void> stopKeepAlive() => _method.invokeMethod('stopKeepAlive');
 }

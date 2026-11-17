@@ -71,6 +71,22 @@ class MainActivity : FlutterActivity() {
                     if (data == null) result.error("ARG", "data is required", null)
                     else write(data, result)
                 }
+                "startKeepAlive" -> {
+                    try {
+                        ObdKeepAliveService.start(
+                            this,
+                            call.argument<String>("title") ?: "Car OBD",
+                            call.argument<String>("text") ?: ""
+                        )
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("SERVICE", e.message, null)
+                    }
+                }
+                "stopKeepAlive" -> {
+                    ObdKeepAliveService.stop(this)
+                    result.success(null)
+                }
                 "disconnect" -> {
                     io.execute { closeSocket() }
                     result.success(null)
@@ -178,6 +194,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        ObdKeepAliveService.stop(this)
         generation++
         closeSocket()
         super.onDestroy()

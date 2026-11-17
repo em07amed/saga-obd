@@ -4,6 +4,7 @@ import '../main.dart';
 import '../obd/fuel.dart';
 import '../obd/pids.dart';
 import 'drive_mode_page.dart';
+import 'fuel_page.dart';
 import 'widgets.dart';
 import '../l10n.dart';
 
@@ -22,15 +23,18 @@ class DashboardPage extends StatelessWidget {
         ConnectionBar(),
         Expanded(
           child: ListenableBuilder(
-            listenable: Listenable.merge([obd, trips, settings, App.maintenance]),
+            listenable: Listenable.merge([obd, trips, settings, App.maintenance, App.fuel]),
             builder: (context, _) {
               final v = obd.values;
 
               // Fuel in tank and range.
               final levelPct = v[Pids.fuelLevel];
-              final litres =
-                  levelPct == null ? null : levelPct / 100 * settings.tankLiters;
-              final avg = trips.avgL100 ?? settings.defaultL100;
+              final litres = App.fuel.litresNow;
+              final lowFuel =
+                  litres != null && litres < settings.tankLiters * 0.15;
+              final avg = App.fuel.realAvgL100 ??
+                  trips.avgL100 ??
+                  settings.defaultL100;
               final rangeKm =
                   litres == null || avg <= 0 ? null : litres / avg * 100;
 
@@ -69,17 +73,21 @@ class DashboardPage extends StatelessWidget {
                     min: 40,
                     max: 130,
                     redFrom: 105),
-                StatTile(
-                  label: tr('البنزين'),
-                  icon: Icons.local_gas_station,
-                  value: fmt(litres, 1),
-                  unit: tr('لتر'),
-                  sub: levelPct == null
-                      ? tr('مستوى البنزين مش مدعوم')
-                      : tr('${fmt(levelPct)}% • يكفي ~${fmt(rangeKm)} كم'),
-                  color: levelPct != null && levelPct < 15
-                      ? AppColors.warning(context)
-                      : null,
+                GestureDetector(
+                  onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const FuelPage())),
+                  child: StatTile(
+                    label: tr('البنزين'),
+                    icon: Icons.local_gas_station,
+                    value: fmt(litres, 1),
+                    unit: tr('لتر'),
+                    sub: litres == null
+                        ? tr('دوس هنا وسجّل تفويلة')
+                        : levelPct != null
+                            ? tr('${fmt(levelPct)}% • يكفي ~${fmt(rangeKm)} كم')
+                            : tr('تقديري • يكفي ~${fmt(rangeKm)} كم'),
+                    color: lowFuel ? AppColors.warning(context) : null,
+                  ),
                 ),
                 StatTile(
                   label: tr('الاستهلاك اللحظي'),
