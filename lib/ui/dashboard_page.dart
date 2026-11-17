@@ -108,6 +108,7 @@ class DashboardPage extends StatelessWidget {
                       : switch (App.maintenance.odometerSource) {
                           'obd' => 'من كمبيوتر العربية',
                           'ecu' => 'من كمبيوتر العربية • لحظي',
+                          'ecu_raw' => 'تقريبي من كمبيوتر العربية • اضبطه من الصيانة',
                           _ => 'تقديري • بيزيد مع الرحلات',
                         },
                 ),

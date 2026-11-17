@@ -111,6 +111,8 @@ class _OdometerCard extends StatelessWidget {
                         : switch (m.odometerSource) {
                             'obd' => 'من كمبيوتر العربية',
                             'ecu' => 'من كمبيوتر العربية (بعد المعايرة) • لحظي',
+                            'ecu_raw' =>
+                              'تقريبي من كمبيوتر العربية • دوس تحديث واكتب رقم التابلوه للدقة',
                             _ => 'تقديري: آخر قراءة + الرحلات المسجلة',
                           },
                     style: Theme.of(context).textTheme.bodySmall,

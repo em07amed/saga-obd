@@ -204,7 +204,13 @@ class ObdService extends ChangeNotifier {
       final batch = <int>[..._fastPids];
       final slow = _slowPids;
       // Dashboard-critical slow PIDs get extra turns.
-      const priority = [Pids.coolant, Pids.fuelLevel, Pids.iat, Pids.throttle];
+      const priority = [
+        Pids.coolant,
+        Pids.fuelLevel,
+        Pids.iat,
+        Pids.throttle,
+        0x31, // distance since codes cleared → odometer
+      ];
       if (slow.isNotEmpty) {
         batch.add(slow[_slowIndex % slow.length]);
         _slowIndex++;

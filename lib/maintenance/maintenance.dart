@@ -100,8 +100,11 @@ class MaintenanceService extends ChangeNotifier {
   /// odometer to within a few km, updated live by the ECU.
   double? get _fromClearedDistance {
     final d = obd.values[0x31];
-    final off = settings.odoOffset;
-    if (d == null || off == null) return null;
+    if (d == null) return null;
+    // Not calibrated and no dashboard reading at all: show 0131 as-is.
+    // On a car whose codes were never cleared it is within a few km.
+    final off = settings.odoOffset ?? (_estimateBase == null ? 0.0 : null);
+    if (off == null) return null;
     final km = d + off;
     // If codes were cleared since calibration, 0131 restarts from 0 and
     // the result drops below the last known reading: stop trusting it.
@@ -113,7 +116,9 @@ class MaintenanceService extends ChangeNotifier {
   /// Where the odometer value comes from: 'obd', 'ecu', 'estimate' or null.
   String? get odometerSource {
     if (odometerFromObd) return 'obd';
-    if (_fromClearedDistance != null) return 'ecu';
+    if (_fromClearedDistance != null) {
+      return settings.odoOffset == null ? 'ecu_raw' : 'ecu';
+    }
     if (_estimateBase != null) return 'estimate';
     return null;
   }
