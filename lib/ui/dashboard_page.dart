@@ -75,7 +75,7 @@ class DashboardPage extends StatelessWidget {
                       ? 'مستوى البنزين مش مدعوم'
                       : '${fmt(levelPct)}% • يكفي ~${fmt(rangeKm)} كم',
                   color: levelPct != null && levelPct < 15
-                      ? AppColors.warning(context)(context)
+                      ? AppColors.warning(context)
                       : null,
                 ),
                 StatTile(
