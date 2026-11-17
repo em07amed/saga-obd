@@ -52,6 +52,20 @@ class SettingsPage extends StatelessWidget {
             value: s.alertsOn,
             onChanged: s.setAlerts,
           ),
+          SwitchListTile(
+            secondary: Icon(Icons.record_voice_over_outlined),
+            title: Text(tr('اقرا التنبيه بصوت')),
+            value: s.voiceAlerts,
+            onChanged: s.alertsOn ? s.setVoiceAlerts : null,
+          ),
+          ListTile(
+            leading: Icon(Icons.volume_up_outlined),
+            title: Text(tr('جرّب التنبيه الصوتي')),
+            onTap: () => App.obd.bt
+                .speak(tr('تحذير. حرارة الموتور وصلت ${s.coolantAlert.round()} درجة. اركن على جنب وطفي التكييف.'),
+                    Lang.code)
+                .catchError((_) {}),
+          ),
           ListTile(
             leading: Icon(Icons.thermostat),
             title: Text(tr('تنبيه الحرارة عند')),

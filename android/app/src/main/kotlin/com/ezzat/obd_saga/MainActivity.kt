@@ -91,6 +91,10 @@ class MainActivity : FlutterActivity() {
                     )
                     result.success(null)
                 }
+                "speak" -> {
+                    speak(call.argument<String>("text") ?: "", call.argument<String>("lang") ?: "ar")
+                    result.success(null)
+                }
                 "stopKeepAlive" -> {
                     ObdKeepAliveService.stop(this)
                     result.success(null)
@@ -197,6 +201,42 @@ class MainActivity : FlutterActivity() {
 
     private var alertId = 100
 
+    // ---- spoken alerts (Android TextToSpeech, no plugin needed) ----
+    private var tts: android.speech.tts.TextToSpeech? = null
+    private var ttsReady = false
+    private val pendingSpeech = mutableListOf<Pair<String, String>>()
+
+    private fun speak(text: String, lang: String) {
+        if (text.isBlank()) return
+        val engine = tts
+        if (engine == null) {
+            pendingSpeech.add(text to lang)
+            tts = android.speech.tts.TextToSpeech(applicationContext) { status ->
+                ttsReady = status == android.speech.tts.TextToSpeech.SUCCESS
+                if (ttsReady) {
+                    tts?.setAudioAttributes(
+                        android.media.AudioAttributes.Builder()
+                            .setUsage(android.media.AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
+                            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build()
+                    )
+                    pendingSpeech.forEach { (t, l) -> say(t, l) }
+                }
+                pendingSpeech.clear()
+            }
+            return
+        }
+        if (ttsReady) say(text, lang) else pendingSpeech.add(text to lang)
+    }
+
+    private fun say(text: String, lang: String) {
+        val engine = tts ?: return
+        val wanted = java.util.Locale(lang)
+        val ok = engine.isLanguageAvailable(wanted) >= android.speech.tts.TextToSpeech.LANG_AVAILABLE
+        engine.language = if (ok) wanted else java.util.Locale.ENGLISH
+        engine.speak(text, android.speech.tts.TextToSpeech.QUEUE_ADD, null, "alert${System.nanoTime()}")
+    }
+
     private fun alert(title: String, text: String, sound: Boolean) {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
         val channel = if (sound) "obd_alerts" else "obd_info"
@@ -235,6 +275,8 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        tts?.shutdown()
+        tts = null
         ObdKeepAliveService.stop(this)
         generation++
         closeSocket()

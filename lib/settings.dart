@@ -17,6 +17,7 @@ class AppSettings extends ChangeNotifier {
   String themeMode = 'sport'; // sport | system | light | dark
   String lang = 'ar'; // ar | en
   bool alertsOn = true;
+  bool voiceAlerts = true;
   double coolantAlert = 80; // °C; 105 is the normal value, 80 for testing
 
   /// Official Egypt pump prices (EGP/L) as of Nov 2026. Editable per vehicle
@@ -51,6 +52,7 @@ class AppSettings extends ChangeNotifier {
     themeMode = _p.getString('themeMode') ?? themeMode;
     lang = _p.getString('lang') ?? lang;
     alertsOn = _p.getBool('alertsOn') ?? true;
+    voiceAlerts = _p.getBool('voiceAlerts') ?? true;
     coolantAlert = _p.getDouble('coolantAlert') ?? coolantAlert;
     Lang.code = lang;
 
@@ -128,6 +130,12 @@ class AppSettings extends ChangeNotifier {
   Future<void> setCoolantAlert(double v) async {
     coolantAlert = v;
     await _p.setDouble('coolantAlert', v);
+    notifyListeners();
+  }
+
+  Future<void> setVoiceAlerts(bool v) async {
+    voiceAlerts = v;
+    await _p.setBool('voiceAlerts', v);
     notifyListeners();
   }
 

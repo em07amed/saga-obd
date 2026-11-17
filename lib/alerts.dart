@@ -51,7 +51,9 @@ class AlertService {
       if (!_hot && coolant >= limit) {
         _hot = true;
         _fire('hot', tr('حرارة الموتور عالية'),
-            tr('حرارة المياه ${coolant.toStringAsFixed(0)}°C. اركن وطفي التكييف.'));
+            tr('حرارة المياه ${coolant.toStringAsFixed(0)}°C. اركن وطفي التكييف.'),
+            speech: tr('تحذير. حرارة الموتور وصلت ${coolant.toStringAsFixed(0)} درجة. '
+                'اركن على جنب وطفي التكييف.'));
       } else if (_hot && coolant < limit - 5) {
         _hot = false;
       }
@@ -64,10 +66,12 @@ class AlertService {
     if (volt != null && settled) {
       if (volt < 12.8) {
         _fire('lowvolt', tr('مشكلة في الشحن'),
-            tr('البطارية ${volt.toStringAsFixed(1)}V والموتور شغال. افحص الدينامو.'));
+            tr('البطارية ${volt.toStringAsFixed(1)}V والموتور شغال. افحص الدينامو.'),
+            speech: tr('تحذير. البطارية مش بتشحن كويس. افحص الدينامو.'));
       } else if (volt > 15.2) {
         _fire('highvolt', tr('فولت عالي'),
-            tr('البطارية ${volt.toStringAsFixed(1)}V. افحص منظم الدينامو.'));
+            tr('البطارية ${volt.toStringAsFixed(1)}V. افحص منظم الدينامو.'),
+            speech: tr('تحذير. فولت الشحن عالي. افحص منظم الدينامو.'));
       }
     }
 
@@ -76,6 +80,7 @@ class AlertService {
     if (dtc > _lastDtcCount) {
       _fire('dtc', tr('عطل جديد'),
           tr('الكمبيوتر سجّل $dtc كود. افتح القراءات ← الأعطال.'),
+          speech: tr('انتباه. كمبيوتر العربية سجّل عطل جديد.'),
           force: true);
     }
     _lastDtcCount = dtc;
@@ -90,19 +95,25 @@ class AlertService {
             tr(d.overdue
                 ? '${d.entry.type} فات ميعاده'
                 : '${d.entry.type} قرّب'),
+            speech: tr(d.overdue
+                ? 'تذكير. ميعاد ${d.entry.type} فات.'
+                : 'تذكير. ميعاد ${d.entry.type} قرّب.'),
             sound: false);
       }
     }
   }
 
   void _fire(String key, String title, String text,
-      {bool force = false, bool sound = true}) {
+      {String? speech, bool force = false, bool sound = true}) {
     final now = DateTime.now();
     final last = _last[key];
     if (!force && last != null && now.difference(last) < _cooldown) return;
     _last[key] = now;
     HapticFeedback.heavyImpact();
     bt.notify(title, text, sound: sound).catchError((_) {});
+    if (settings.voiceAlerts && speech != null) {
+      bt.speak(speech, Lang.code).catchError((_) {});
+    }
   }
 
   void dispose() => obd.removeListener(_check);
