@@ -1,0 +1,26 @@
+name: obd_saga
+description: OBD2 dashboard + trip logger for ELM327 (Proton Saga).
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  intl: any
+  sqflite: ^2.4.0
+  path: ^1.9.0
+  shared_preferences: ^2.3.0
+  permission_handler: ^11.4.0
+  geolocator: ^13.0.1
+  wakelock_plus: ^1.2.8
+
+dev_dependencies:
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
