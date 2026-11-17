@@ -407,4 +407,6 @@ const Map<String, String> _en = {
   'فات ميعاده': 'past due',
   'تنبيهات وإنت سايق': 'Driving alerts',
   'الحرارة، الشحن، الأعطال، مواعيد الصيانة': 'Temperature, charging, trouble codes, services',
+  'تنبيه الحرارة عند': 'Coolant alert at',
+  'الطبيعي 105. خليه أقل عشان تجرّب التنبيه.': 'Normal is 105. Set lower to test the alert.',
 };

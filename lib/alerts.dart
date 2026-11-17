@@ -44,14 +44,15 @@ class AlertService {
       _engineOnSince = null;
     }
 
-    // Coolant: fire at 105 °C, re-arm below 100 °C.
+    // Coolant: fire at the configured limit, re-arm 5 °C below it.
     final coolant = v[Pids.coolant];
+    final limit = settings.coolantAlert;
     if (coolant != null) {
-      if (!_hot && coolant >= 105) {
+      if (!_hot && coolant >= limit) {
         _hot = true;
         _fire('hot', tr('حرارة الموتور عالية'),
             tr('حرارة المياه ${coolant.toStringAsFixed(0)}°C. اركن وطفي التكييف.'));
-      } else if (_hot && coolant < 100) {
+      } else if (_hot && coolant < limit - 5) {
         _hot = false;
       }
     }

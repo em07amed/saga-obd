@@ -52,6 +52,19 @@ class SettingsPage extends StatelessWidget {
             value: s.alertsOn,
             onChanged: s.setAlerts,
           ),
+          ListTile(
+            leading: Icon(Icons.thermostat),
+            title: Text(tr('تنبيه الحرارة عند')),
+            subtitle: Text(tr('الطبيعي 105. خليه أقل عشان تجرّب التنبيه.')),
+            trailing: DropdownButton<double>(
+              value: s.coolantAlert,
+              items: [
+                for (final t in [80.0, 90.0, 100.0, 105.0, 110.0])
+                  DropdownMenuItem(value: t, child: Text('${t.round()} °C')),
+              ],
+              onChanged: (v) => s.setCoolantAlert(v ?? 105),
+            ),
+          ),
           _Header(tr('اللغة')),
           Padding(
             padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
