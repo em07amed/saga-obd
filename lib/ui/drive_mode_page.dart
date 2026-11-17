@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 
 import '../main.dart';
 import '../obd/pids.dart';
+import 'sport_theme.dart';
 import 'widgets.dart';
+import '../l10n.dart';
 
 /// Full-screen landscape view for a phone on a dash mount: few, large numbers.
 class DriveModePage extends StatefulWidget {
@@ -64,7 +66,10 @@ class _DriveModePageState extends State<DriveModePage> {
                           style: TextStyle(
                               fontSize: size,
                               height: 1.1,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w900,
+                              fontStyle: isSport(context)
+                                  ? FontStyle.italic
+                                  : FontStyle.normal,
                               color: color)),
                     ),
                     Text(unit,
@@ -74,16 +79,16 @@ class _DriveModePageState extends State<DriveModePage> {
                 );
 
             return Padding(
-              padding: const EdgeInsets.all(12),
+              padding: EdgeInsets.all(12),
               child: Column(
                 children: [
                   Row(
                     children: [
                       IconButton(
-                        tooltip: 'خروج',
+                        tooltip: tr('خروج'),
                         iconSize: 28,
                         onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.close),
+                        icon: Icon(Icons.close),
                       ),
                       Expanded(
                         child: Text('${s.vehicle.name} • ${obd.status}',
@@ -92,9 +97,34 @@ class _DriveModePageState extends State<DriveModePage> {
                             style: TextStyle(color: scheme.onSurfaceVariant)),
                       ),
                       if (App.maintenance.odometerKm != null)
-                        Text('العداد ${fmt(App.maintenance.odometerKm)} كم',
+                        Text(tr('العداد ${fmt(App.maintenance.odometerKm)} كم'),
                             style: TextStyle(color: scheme.onSurfaceVariant)),
                     ],
+                  ),
+                  // Shift light: 12 blocks, green → amber → red up to 6000 rpm.
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(
+                      children: [
+                        for (var i = 0; i < 12; i++)
+                          Expanded(
+                            child: Container(
+                              height: 10,
+                              margin: const EdgeInsets.symmetric(horizontal: 2),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(3),
+                                color: (rpm ?? 0) >= 6000 * (i + 1) / 12
+                                    ? (i < 7
+                                        ? AppColors.ok(context)
+                                        : i < 10
+                                            ? AppColors.warning(context)
+                                            : AppColors.danger(context))
+                                    : scheme.outlineVariant,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                   Expanded(
                     child: Row(
@@ -104,7 +134,7 @@ class _DriveModePageState extends State<DriveModePage> {
                         Expanded(
                           flex: 3,
                           child: Card(
-                            child: big('السرعة', fmt(v[Pids.speed]), 'كم/س',
+                            child: big(tr('السرعة'), fmt(v[Pids.speed]), tr('كم/س'),
                                 size: 140),
                           ),
                         ),
@@ -116,7 +146,7 @@ class _DriveModePageState extends State<DriveModePage> {
                                 child: Row(children: [
                                   Expanded(
                                     child: Card(
-                                      child: big('RPM', fmt(rpm), 'لفة/د',
+                                      child: big('RPM', fmt(rpm), tr('لفة/د'),
                                           color: redline
                                               ? AppColors.danger(context)
                                               : null),
@@ -124,7 +154,7 @@ class _DriveModePageState extends State<DriveModePage> {
                                   ),
                                   Expanded(
                                     child: Card(
-                                      child: big('حرارة المياه', fmt(coolant),
+                                      child: big(tr('حرارة المياه'), fmt(coolant),
                                           '°C',
                                           color: hot
                                               ? AppColors.danger(context)
@@ -138,11 +168,11 @@ class _DriveModePageState extends State<DriveModePage> {
                                   Expanded(
                                     child: Card(
                                       child: big(
-                                        'البنزين',
+                                        tr('البنزين'),
                                         fmt(litres, 1),
                                         range == null
-                                            ? 'لتر'
-                                            : 'لتر • ~${fmt(range)} كم',
+                                            ? tr('لتر')
+                                            : tr('لتر • ~${fmt(range)} كم'),
                                         color: level != null && level < 15
                                             ? AppColors.warning(context)
                                             : null,
@@ -152,20 +182,20 @@ class _DriveModePageState extends State<DriveModePage> {
                                   Expanded(
                                     child: Card(
                                       child: obd.instantL100 != null
-                                          ? big('الاستهلاك',
-                                              fmt(obd.instantL100, 1), 'ل/100كم')
-                                          : big('الاستهلاك',
-                                              fmt(obd.fuelRateLh, 2), 'ل/ساعة'),
+                                          ? big(tr('الاستهلاك'),
+                                              fmt(obd.instantL100, 1), tr('ل/100كم'))
+                                          : big(tr('الاستهلاك'),
+                                              fmt(obd.fuelRateLh, 2), tr('ل/ساعة')),
                                     ),
                                   ),
                                   Expanded(
                                     child: Card(
                                       child: big(
-                                        'الرحلة',
+                                        tr('الرحلة'),
                                         fmt(trips.distanceKm, 1),
                                         trips.active
-                                            ? 'كم • ${fmt(trips.fuelL * s.fuelPrice)} ج.م'
-                                            : 'كم',
+                                            ? tr('كم • ${fmt(trips.fuelL * s.fuelPrice)} ج.م')
+                                            : tr('كم'),
                                       ),
                                     ),
                                   ),

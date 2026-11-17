@@ -5,8 +5,9 @@ import 'package:intl/intl.dart' show DateFormat;
 import '../main.dart';
 import '../maintenance/maintenance.dart';
 import 'widgets.dart';
+import '../l10n.dart';
 
-final _day = DateFormat('d MMM yyyy', 'ar');
+DateFormat get _day => DateFormat('d MMM yyyy', Lang.code);
 
 class MaintenancePage extends StatelessWidget {
   const MaintenancePage({super.key});
@@ -17,39 +18,39 @@ class MaintenancePage extends StatelessWidget {
     return Scaffold(
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openEditor(context, null),
-        icon: const Icon(Icons.add),
-        label: const Text('صيانة جديدة'),
+        icon: Icon(Icons.add),
+        label: Text(tr('صيانة جديدة')),
       ),
       body: ListenableBuilder(
         listenable: Listenable.merge([m, App.obd]),
         builder: (context, _) {
           final due = m.due;
           return ListView(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
+            padding: EdgeInsets.fromLTRB(12, 12, 12, 96),
             children: [
               _OdometerCard(m: m),
               if (due.isNotEmpty) ...[
-                const _Section('المواعيد الجاية'),
+                _Section(tr('المواعيد الجاية')),
                 for (final d in due) _DueTile(d: d),
               ],
-              _Section('السجل (${m.entries.length}) • '
-                  'إجمالي ${fmt(m.totalCost)} ج.م'),
+              _Section(tr('السجل (${m.entries.length}) • '
+                  'إجمالي ${fmt(m.totalCost)} ج.م')),
               if (m.entries.isEmpty)
-                const Padding(
+                Padding(
                   padding: EdgeInsets.all(24),
-                  child: Center(child: Text('لسه مفيش صيانات متسجلة')),
+                  child: Center(child: Text(tr('لسه مفيش صيانات متسجلة'))),
                 ),
               for (final e in m.entries)
                 Card(
                   child: ListTile(
-                    leading: const Icon(Icons.build_circle_outlined),
-                    title: Text(e.type),
+                    leading: Icon(Icons.build_circle_outlined),
+                    title: Text(tr(e.type)),
                     subtitle: Text([
                       _day.format(e.date),
-                      if (e.km != null) '${fmt(e.km)} كم',
+                      if (e.km != null) tr('${fmt(e.km)} كم'),
                       if (e.notes != null && e.notes!.isNotEmpty) e.notes!,
                     ].join(' • ')),
-                    trailing: Text('${fmt(e.cost)} ج.م',
+                    trailing: Text(tr('${fmt(e.cost)} ج.م'),
                         style: Theme.of(context).textTheme.titleSmall),
                     onTap: () => _openEditor(context, e),
                   ),
@@ -73,7 +74,7 @@ class _Section extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.fromLTRB(4, 16, 4, 6),
+        padding: EdgeInsets.fromLTRB(4, 16, 4, 6),
         child: Text(text,
             style: TextStyle(
                 color: Theme.of(context).colorScheme.primary,
@@ -83,7 +84,7 @@ class _Section extends StatelessWidget {
 
 class _OdometerCard extends StatelessWidget {
   final MaintenanceService m;
-  const _OdometerCard({required this.m});
+  _OdometerCard({required this.m});
 
   @override
   Widget build(BuildContext context) {
@@ -92,28 +93,28 @@ class _OdometerCard extends StatelessWidget {
     return Card(
       color: scheme.primaryContainer,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(16),
         child: Row(
           children: [
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('العداد', style: Theme.of(context).textTheme.labelLarge),
-                  Text(km == null ? '—' : '${fmt(km)} كم',
+                  Text(tr('العداد'), style: Theme.of(context).textTheme.labelLarge),
+                  Text(km == null ? '—' : tr('${fmt(km)} كم'),
                       style: Theme.of(context)
                           .textTheme
                           .headlineMedium
                           ?.copyWith(fontWeight: FontWeight.bold)),
                   Text(
                     km == null
-                        ? 'اكتب رقم عداد التابلوه مرة واحدة'
+                        ? tr('اكتب رقم عداد التابلوه مرة واحدة')
                         : switch (m.odometerSource) {
-                            'obd' => 'من كمبيوتر العربية',
-                            'ecu' => 'من كمبيوتر العربية (بعد المعايرة) • لحظي',
+                            'obd' => tr('من كمبيوتر العربية'),
+                            'ecu' => tr('من كمبيوتر العربية (بعد المعايرة) • لحظي'),
                             'ecu_raw' =>
-                              'تقريبي من كمبيوتر العربية • دوس تحديث واكتب رقم التابلوه للدقة',
-                            _ => 'تقديري: آخر قراءة + الرحلات المسجلة',
+                              tr('تقريبي من كمبيوتر العربية • دوس تحديث واكتب رقم التابلوه للدقة'),
+                            _ => tr('تقديري: آخر قراءة + الرحلات المسجلة'),
                           },
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
@@ -123,7 +124,7 @@ class _OdometerCard extends StatelessWidget {
             if (!m.odometerFromObd)
               FilledButton.tonal(
                 onPressed: () => _editOdometer(context),
-                child: Text(km == null ? 'إدخال' : 'تحديث'),
+                child: Text(km == null ? tr('إدخال') : tr('تحديث')),
               ),
           ],
         ),
@@ -137,21 +138,21 @@ class _OdometerCard extends StatelessWidget {
     final v = await showDialog<double>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('رقم العداد من التابلوه'),
+        title: Text(tr('رقم العداد من التابلوه')),
         content: TextField(
           controller: c,
           autofocus: true,
           keyboardType: TextInputType.number,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          decoration: const InputDecoration(suffixText: 'كم'),
+          decoration: InputDecoration(suffixText: tr('كم')),
         ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('إلغاء')),
+              child: Text(tr('إلغاء'))),
           FilledButton(
               onPressed: () => Navigator.pop(ctx, double.tryParse(c.text)),
-              child: const Text('حفظ')),
+              child: Text(tr('حفظ'))),
         ],
       ),
     );
@@ -161,7 +162,7 @@ class _OdometerCard extends StatelessWidget {
 
 class _DueTile extends StatelessWidget {
   final DueItem d;
-  const _DueTile({required this.d});
+  _DueTile({required this.d});
 
   @override
   Widget build(BuildContext context) {
@@ -173,23 +174,23 @@ class _DueTile extends StatelessWidget {
     final parts = <String>[
       if (d.kmLeft != null)
         d.kmLeft! <= 0
-            ? 'متأخر ${fmt(-d.kmLeft!)} كم'
-            : 'فاضل ${fmt(d.kmLeft)} كم',
+            ? tr('متأخر ${fmt(-d.kmLeft!)} كم')
+            : tr('فاضل ${fmt(d.kmLeft)} كم'),
       if (d.daysLeft != null)
         d.daysLeft! <= 0
-            ? 'متأخر ${-d.daysLeft!} يوم'
-            : 'فاضل ${d.daysLeft} يوم',
+            ? tr('متأخر ${-d.daysLeft!} يوم')
+            : tr('فاضل ${d.daysLeft} يوم'),
     ];
     return Card(
       child: ListTile(
         leading: Icon(
             d.overdue ? Icons.error_outline : Icons.schedule,
             color: color),
-        title: Text(d.entry.type),
+        title: Text(tr(d.entry.type)),
         subtitle: Text(parts.join(' • ')),
         trailing: Text(
           [
-            if (d.entry.nextKm != null) '${fmt(d.entry.nextKm)} كم',
+            if (d.entry.nextKm != null) tr('${fmt(d.entry.nextKm)} كم'),
             if (d.entry.nextDate != null) _day.format(d.entry.nextDate!),
           ].join('\n'),
           textAlign: TextAlign.end,
@@ -251,7 +252,7 @@ class _MaintenanceEditorState extends State<MaintenanceEditor> {
     final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,
-      initialDate: next ? (_nextDate ?? now.add(const Duration(days: 180))) : _date,
+      initialDate: next ? (_nextDate ?? now.add(Duration(days: 180))) : _date,
       firstDate: DateTime(now.year - 20),
       lastDate: DateTime(now.year + 10),
     );
@@ -289,14 +290,14 @@ class _MaintenanceEditorState extends State<MaintenanceEditor> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('حذف الصيانة دي؟'),
+        title: Text(tr('حذف الصيانة دي؟')),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('إلغاء')),
+              child: Text(tr('إلغاء'))),
           FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('حذف')),
+              child: Text(tr('حذف'))),
         ],
       ),
     );
@@ -311,37 +312,37 @@ class _MaintenanceEditorState extends State<MaintenanceEditor> {
     final digits = [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))];
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.entry == null ? 'صيانة جديدة' : 'تعديل الصيانة'),
+        title: Text(widget.entry == null ? tr('صيانة جديدة') : tr('تعديل الصيانة')),
         actions: [
           if (widget.entry != null)
             IconButton(
-                tooltip: 'حذف',
+                tooltip: tr('حذف'),
                 onPressed: _delete,
-                icon: const Icon(Icons.delete_outline)),
+                icon: Icon(Icons.delete_outline)),
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(16),
         children: [
           DropdownButtonFormField<String>(
             initialValue: _type,
-            decoration: const InputDecoration(labelText: 'النوع'),
+            decoration: InputDecoration(labelText: tr('النوع')),
             items: [
               for (final t in maintenanceTypes)
-                DropdownMenuItem(value: t, child: Text(t)),
+                DropdownMenuItem(value: t, child: Text(tr(t))),
             ],
             onChanged: (v) => setState(() => _type = v ?? _type),
           ),
           if (_type == 'أخرى')
             TextField(
               controller: _customType,
-              decoration: const InputDecoration(labelText: 'اكتب النوع'),
+              decoration: InputDecoration(labelText: tr('اكتب النوع')),
             ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           ListTile(
             contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.event),
-            title: const Text('التاريخ'),
+            leading: Icon(Icons.event),
+            title: Text(tr('التاريخ')),
             trailing: Text(_day.format(_date)),
             onTap: () => _pickDate(next: false),
           ),
@@ -349,24 +350,24 @@ class _MaintenanceEditorState extends State<MaintenanceEditor> {
             controller: _km,
             keyboardType: TextInputType.number,
             inputFormatters: digits,
-            decoration: const InputDecoration(
-                labelText: 'العداد وقت الصيانة', suffixText: 'كم'),
+            decoration: InputDecoration(
+                labelText: tr('العداد وقت الصيانة'), suffixText: tr('كم')),
           ),
           TextField(
             controller: _cost,
             keyboardType: TextInputType.number,
             inputFormatters: digits,
             decoration:
-                const InputDecoration(labelText: 'التكلفة', suffixText: 'ج.م'),
+                InputDecoration(labelText: tr('التكلفة'), suffixText: tr('ج.م')),
           ),
           TextField(
             controller: _notes,
             maxLines: 3,
-            decoration: const InputDecoration(
-                labelText: 'ملاحظات', hintText: 'نوع الزيت، المركز، القطعة…'),
+            decoration: InputDecoration(
+                labelText: tr('ملاحظات'), hintText: tr('نوع الزيت، المركز، القطعة…')),
           ),
-          const SizedBox(height: 16),
-          Text('الميعاد الجاي (اختياري)',
+          SizedBox(height: 16),
+          Text(tr('الميعاد الجاي (اختياري)'),
               style: TextStyle(
                   color: Theme.of(context).colorScheme.primary,
                   fontWeight: FontWeight.bold)),
@@ -374,31 +375,31 @@ class _MaintenanceEditorState extends State<MaintenanceEditor> {
             controller: _everyKm,
             keyboardType: TextInputType.number,
             inputFormatters: digits,
-            decoration: const InputDecoration(
-              labelText: 'بعد كام كيلو',
-              suffixText: 'كم',
-              helperText: 'حسب كتيب الصيانة أو كلام الميكانيكي',
+            decoration: InputDecoration(
+              labelText: tr('بعد كام كيلو'),
+              suffixText: tr('كم'),
+              helperText: tr('حسب كتيب الصيانة أو كلام الميكانيكي'),
             ),
           ),
           ListTile(
             contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.event_repeat),
-            title: const Text('أو في تاريخ'),
+            leading: Icon(Icons.event_repeat),
+            title: Text(tr('أو في تاريخ')),
             trailing: Row(mainAxisSize: MainAxisSize.min, children: [
               Text(_nextDate == null ? '—' : _day.format(_nextDate!)),
               if (_nextDate != null)
                 IconButton(
-                    tooltip: 'إلغاء التاريخ',
+                    tooltip: tr('إلغاء التاريخ'),
                     onPressed: () => setState(() => _nextDate = null),
-                    icon: const Icon(Icons.close)),
+                    icon: Icon(Icons.close)),
             ]),
             onTap: () => _pickDate(next: true),
           ),
-          const SizedBox(height: 24),
+          SizedBox(height: 24),
           FilledButton.icon(
             onPressed: _save,
-            icon: const Icon(Icons.save),
-            label: const Text('حفظ'),
+            icon: Icon(Icons.save),
+            label: Text(tr('حفظ')),
           ),
         ],
       ),

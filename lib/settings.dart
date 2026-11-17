@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'l10n.dart';
 import 'trips/trip_db.dart';
 import 'vehicle.dart';
 
@@ -13,7 +14,8 @@ class AppSettings extends ChangeNotifier {
   String? deviceAddress;
   String? deviceName;
   bool autoConnect = true;
-  String themeMode = 'system'; // system | light | dark
+  String themeMode = 'sport'; // sport | system | light | dark
+  String lang = 'ar'; // ar | en
 
   /// Official Egypt pump prices (EGP/L) as of Nov 2026. Editable per vehicle
   /// because the pricing committee changes them periodically.
@@ -45,6 +47,8 @@ class AppSettings extends ChangeNotifier {
     deviceName = _p.getString('deviceName');
     autoConnect = _p.getBool('autoConnect') ?? true;
     themeMode = _p.getString('themeMode') ?? themeMode;
+    lang = _p.getString('lang') ?? lang;
+    Lang.code = lang;
 
     vehicles = await db.vehicles();
     if (vehicles.isEmpty) {
@@ -114,6 +118,13 @@ class AppSettings extends ChangeNotifier {
     deviceAddress = address;
     await _p.setString('deviceName', name);
     await _p.setString('deviceAddress', address);
+    notifyListeners();
+  }
+
+  Future<void> setLang(String code) async {
+    lang = code;
+    Lang.code = code;
+    await _p.setString('lang', code);
     notifyListeners();
   }
 

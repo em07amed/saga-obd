@@ -8,8 +8,9 @@ import 'package:intl/intl.dart' show DateFormat;
 import '../main.dart';
 import '../trips/trip_db.dart';
 import 'widgets.dart';
+import '../l10n.dart';
 
-final _dateFmt = DateFormat('EEE d MMM • h:mm a', 'ar');
+DateFormat get _dateFmt => DateFormat('EEE d MMM • h:mm a', Lang.code);
 
 class TripsPage extends StatefulWidget {
   const TripsPage({super.key});
@@ -66,26 +67,26 @@ class _TripsPageState extends State<TripsPage> {
               .where((t) => t.endedAt != null)
               .toList();
           if (snap.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
+            return Center(child: CircularProgressIndicator());
           }
           if (trips.isEmpty) {
-            return ListView(children: const [
+            return ListView(children: [
               SizedBox(height: 200),
-              Center(child: Text('لسه مفيش رحلات مسجلة')),
+              Center(child: Text(tr('لسه مفيش رحلات مسجلة'))),
             ]);
           }
           return ListView(
-            padding: const EdgeInsets.all(8),
+            padding: EdgeInsets.all(8),
             children: [
               _MonthSummary(trips: trips),
               for (final t in trips)
                 Card(
                   child: ListTile(
                     title: Text(_dateFmt.format(t.startedAt)),
-                    subtitle: Text('${fmt(t.distanceKm, 1)} كم • '
+                    subtitle: Text(tr('${fmt(t.distanceKm, 1)} كم • '
                         '${fmtDuration(t.duration)} • '
-                        '${fmt(t.avgL100, 1)} ل/100'),
-                    trailing: Text('${fmt(t.cost)} ج.م',
+                        '${fmt(t.avgL100, 1)} ل/100')),
+                    trailing: Text(tr('${fmt(t.cost)} ج.م'),
                         style: Theme.of(context).textTheme.titleMedium),
                     onTap: () async {
                       await Navigator.of(context).push(MaterialPageRoute(
@@ -104,7 +105,7 @@ class _TripsPageState extends State<TripsPage> {
 
 class _MonthSummary extends StatelessWidget {
   final List<Trip> trips;
-  const _MonthSummary({required this.trips});
+  _MonthSummary({required this.trips});
 
   @override
   Widget build(BuildContext context) {
@@ -117,15 +118,15 @@ class _MonthSummary extends StatelessWidget {
     return Card(
       color: Theme.of(context).colorScheme.primaryContainer,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('${App.settings.vehicle.name} • الشهر ده (${month.length} رحلة)',
+            Text(tr('${App.settings.vehicle.name} • الشهر ده (${month.length} رحلة)'),
                 style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Text('${fmt(km)} كم • ${fmt(fuel, 1)} لتر • ${fmt(cost)} ج.م'),
-            Text('متوسط الاستهلاك: ${km > 1 ? fmt(fuel / km * 100, 1) : '—'} ل/100كم'),
+            SizedBox(height: 8),
+            Text(tr('${fmt(km)} كم • ${fmt(fuel, 1)} لتر • ${fmt(cost)} ج.م')),
+            Text(tr('متوسط الاستهلاك: ${km > 1 ? fmt(fuel / km * 100, 1) : '—'} ل/100كم')),
           ],
         ),
       ),
@@ -144,19 +145,19 @@ class TripDetailPage extends StatelessWidget {
         title: Text(_dateFmt.format(trip.startedAt)),
         actions: [
           IconButton(
-            icon: const Icon(Icons.delete_outline),
+            icon: Icon(Icons.delete_outline),
             onPressed: () async {
               final ok = await showDialog<bool>(
                 context: context,
                 builder: (ctx) => AlertDialog(
-                  title: const Text('حذف الرحلة؟'),
+                  title: Text(tr('حذف الرحلة؟')),
                   actions: [
                     TextButton(
                         onPressed: () => Navigator.pop(ctx, false),
-                        child: const Text('إلغاء')),
+                        child: Text(tr('إلغاء'))),
                     FilledButton(
                         onPressed: () => Navigator.pop(ctx, true),
-                        child: const Text('حذف')),
+                        child: Text(tr('حذف'))),
                   ],
                 ),
               );
@@ -171,68 +172,68 @@ class TripDetailPage extends StatelessWidget {
       body: FutureBuilder<List<TripSample>>(
         future: App.db.samples(trip.id),
         builder: (context, snap) {
-          final samples = snap.data ?? const <TripSample>[];
+          final samples = snap.data ?? <TripSample>[];
           final route = samples
               .where((s) => s.lat != null && s.lng != null)
               .toList();
           return ListView(
-            padding: const EdgeInsets.all(8),
+            padding: EdgeInsets.all(8),
             children: [
               GridView.count(
                 crossAxisCount: 2,
                 shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
+                physics: NeverScrollableScrollPhysics(),
                 childAspectRatio: 1.6,
                 children: [
                   StatTile(
-                      label: 'المسافة',
+                      label: tr('المسافة'),
                       value: fmt(trip.distanceKm, 1),
-                      unit: 'كم',
+                      unit: tr('كم'),
                       sub: trip.gpsKm > 0.3
-                          ? 'GPS • عداد OBD ${fmt(trip.obdKm, 1)}'
-                          : 'من عداد السرعة'),
+                          ? tr('GPS • عداد OBD ${fmt(trip.obdKm, 1)}')
+                          : tr('من عداد السرعة')),
                   StatTile(
-                      label: 'المدة',
+                      label: tr('المدة'),
                       value: fmtDuration(trip.duration),
-                      sub: 'وقوف ${fmtDuration(Duration(seconds: trip.idleSec))}'),
+                      sub: tr('وقوف ${fmtDuration(Duration(seconds: trip.idleSec))}')),
                   StatTile(
-                      label: 'البنزين',
+                      label: tr('البنزين'),
                       value: fmt(trip.fuelL, 2),
-                      unit: 'لتر'),
+                      unit: tr('لتر')),
                   StatTile(
-                      label: 'متوسط الاستهلاك',
+                      label: tr('متوسط الاستهلاك'),
                       value: fmt(trip.avgL100, 1),
-                      unit: 'ل/100'),
+                      unit: tr('ل/100')),
                   StatTile(
-                      label: 'التكلفة',
+                      label: tr('التكلفة'),
                       value: fmt(trip.cost),
-                      unit: 'ج.م',
+                      unit: tr('ج.م'),
                       sub: trip.fuelPrice > 0
-                          ? 'سعر اللتر ${fmt(trip.fuelPrice, 2)}'
-                          : 'حدد سعر اللتر من الإعدادات'),
+                          ? tr('سعر اللتر ${fmt(trip.fuelPrice, 2)}')
+                          : tr('حدد سعر اللتر من الإعدادات')),
                   StatTile(
-                      label: 'أقصى سرعة / حرارة',
+                      label: tr('أقصى سرعة / حرارة'),
                       value: fmt(trip.maxSpeed),
-                      unit: 'كم/س',
-                      sub: 'أعلى حرارة مياه ${fmt(trip.maxCoolant)}°C'),
+                      unit: tr('كم/س'),
+                      sub: tr('أعلى حرارة مياه ${fmt(trip.maxCoolant)}°C')),
                 ],
               ),
               if (route.length > 1) ...[
-                const SizedBox(height: 8),
-                const Text('  خط السير (ملون بالسرعة)'),
+                SizedBox(height: 8),
+                Text(tr('  خط السير (ملون بالسرعة)')),
                 Card(
                   clipBehavior: Clip.antiAlias,
                   child: SizedBox(height: 360, child: _RouteMap(route)),
                 ),
               ],
               if (samples.length > 1) ...[
-                const SizedBox(height: 8),
-                const Text('  السرعة خلال الرحلة'),
+                SizedBox(height: 8),
+                Text(tr('  السرعة خلال الرحلة')),
                 Card(
                   child: SizedBox(
                     height: 160,
                     child: Padding(
-                      padding: const EdgeInsets.all(12),
+                      padding: EdgeInsets.all(12),
                       child: CustomPaint(
                         painter: _LinePainter(
                           samples.map((s) => s.speed ?? 0.0).toList(),
@@ -288,12 +289,12 @@ class _RouteMap extends StatelessWidget {
         initialCameraFit: points.length > 1
             ? CameraFit.bounds(
                 bounds: LatLngBounds.fromPoints(points),
-                padding: const EdgeInsets.all(32),
+                padding: EdgeInsets.all(32),
               )
             : null,
         initialCenter: points.first,
         initialZoom: 15,
-        interactionOptions: const InteractionOptions(
+        interactionOptions: InteractionOptions(
           flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
         ),
       ),
@@ -309,7 +310,7 @@ class _RouteMap extends StatelessWidget {
             point: points.first,
             width: 28,
             height: 28,
-            child: pin(const Color(0xFF006A60), Icons.play_arrow),
+            child: pin(Color(0xFF006A60), Icons.play_arrow),
           ),
           Marker(
             point: points.last,
@@ -318,7 +319,7 @@ class _RouteMap extends StatelessWidget {
             child: pin(AppColors.routeFast, Icons.flag),
           ),
         ]),
-        const SimpleAttributionWidget(
+        SimpleAttributionWidget(
           source: Text('OpenStreetMap contributors'),
         ),
       ],
@@ -352,7 +353,7 @@ class _LinePainter extends CustomPainter {
           ..strokeWidth = 2);
     final tp = TextPainter(
       text: TextSpan(
-          text: '${maxV.toStringAsFixed(0)} كم/س',
+          text: tr('${maxV.toStringAsFixed(0)} كم/س'),
           style: TextStyle(fontSize: 11, color: color)),
       textDirection: TextDirection.rtl,
     )..layout();

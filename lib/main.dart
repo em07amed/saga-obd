@@ -17,7 +17,9 @@ import 'ui/dashboard_page.dart';
 import 'ui/maintenance_page.dart';
 import 'ui/readings_page.dart';
 import 'ui/settings_page.dart';
+import 'ui/sport_theme.dart';
 import 'ui/trips_page.dart';
+import 'l10n.dart';
 
 /// Simple service locator; the app is small enough not to need a DI package.
 class App {
@@ -31,6 +33,7 @@ class App {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('ar');
+  await initializeDateFormatting('en');
   App.db = TripDb();
   await App.db.open();
   App.settings = AppSettings();
@@ -40,7 +43,7 @@ Future<void> main() async {
   App.maintenance =
       MaintenanceService(App.db, App.settings, App.obd, App.trips);
   await App.maintenance.load();
-  runApp(const CarObdApp());
+  runApp(CarObdApp());
 }
 
 class CarObdApp extends StatelessWidget {
@@ -53,17 +56,20 @@ class CarObdApp extends StatelessWidget {
       builder: (context, _) => MaterialApp(
       title: 'Car OBD',
       debugShowCheckedModeBanner: false,
-      locale: const Locale('ar'),
-      supportedLocales: const [Locale('ar'), Locale('en')],
+      locale: Locale(App.settings.lang),
+      supportedLocales: [Locale('ar'), Locale('en')],
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
       themeMode: switch (App.settings.themeMode) {
         'light' => ThemeMode.light,
-        'dark' => ThemeMode.dark,
+        'dark' || 'sport' => ThemeMode.dark,
         _ => ThemeMode.system,
       },
       theme: _theme(Brightness.light),
-      darkTheme: _theme(Brightness.dark),
-      home: const HomeShell(),
+      darkTheme: App.settings.themeMode == 'sport'
+          ? sportTheme()
+          : _theme(Brightness.dark),
+      // Remount on language change so every tr() string is rebuilt.
+      home: HomeShell(key: ValueKey(App.settings.lang)),
       ),
     );
   }
@@ -71,15 +77,15 @@ class CarObdApp extends StatelessWidget {
   static ThemeData _theme(Brightness b) {
     final dark = b == Brightness.dark;
     final scheme = ColorScheme.fromSeed(
-      seedColor: const Color(0xFF006A60),
+      seedColor: Color(0xFF006A60),
       brightness: b,
     );
     return ThemeData(
       useMaterial3: true,
       colorScheme: dark ? scheme : scheme.copyWith(surface: Colors.white),
-      scaffoldBackgroundColor: dark ? const Color(0xFF0F1514) : Colors.white,
+      scaffoldBackgroundColor: dark ? Color(0xFF0F1514) : Colors.white,
       cardTheme: CardThemeData(
-        color: dark ? const Color(0xFF1B2120) : const Color(0xFFF1F6F4),
+        color: dark ? Color(0xFF1B2120) : Color(0xFFF1F6F4),
         elevation: 0,
       ),
     );
@@ -139,12 +145,12 @@ class _HomeShellState extends State<HomeShell> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
         onDestinationSelected: (i) => setState(() => _tab = i),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.speed), label: 'الداشبورد'),
-          NavigationDestination(icon: Icon(Icons.list_alt), label: 'القراءات'),
-          NavigationDestination(icon: Icon(Icons.route), label: 'الرحلات'),
-          NavigationDestination(icon: Icon(Icons.build), label: 'الصيانة'),
-          NavigationDestination(icon: Icon(Icons.settings), label: 'الإعدادات'),
+        destinations: [
+          NavigationDestination(icon: Icon(Icons.speed), label: tr('الداشبورد')),
+          NavigationDestination(icon: Icon(Icons.list_alt), label: tr('القراءات')),
+          NavigationDestination(icon: Icon(Icons.route), label: tr('الرحلات')),
+          NavigationDestination(icon: Icon(Icons.build), label: tr('الصيانة')),
+          NavigationDestination(icon: Icon(Icons.settings), label: tr('الإعدادات')),
         ],
       ),
     );

@@ -9,6 +9,7 @@ import 'bt_channel.dart';
 import 'elm327.dart';
 import 'fuel.dart';
 import 'pids.dart';
+import '../l10n.dart';
 
 enum ObdState { disconnected, connecting, initializing, connected }
 
@@ -38,7 +39,7 @@ class ObdService extends ChangeNotifier {
   late final Elm327 elm;
 
   ObdState state = ObdState.disconnected;
-  String status = 'غير متصل';
+  String status = tr('غير متصل');
   String adapterVersion = '';
   String protocol = '';
 
@@ -83,7 +84,7 @@ class ObdService extends ChangeNotifier {
   ObdService(this.bt, this.settings) {
     elm = Elm327(bt);
     elm.onDisconnected = () {
-      if (state != ObdState.disconnected) _setDisconnected('انقطع الاتصال');
+      if (state != ObdState.disconnected) _setDisconnected(tr('انقطع الاتصال'));
     };
   }
 
@@ -92,25 +93,25 @@ class ObdService extends ChangeNotifier {
   Future<void> connect() async {
     final address = settings.deviceAddress;
     if (address == null) {
-      status = 'اختار جهاز الـ OBD من الإعدادات';
+      status = tr('اختار جهاز الـ OBD من الإعدادات');
       notifyListeners();
       return;
     }
     if (state != ObdState.disconnected) return;
 
     if (!await Permission.bluetoothConnect.request().isGranted) {
-      status = 'لازم توافق على صلاحية Bluetooth (الأجهزة القريبة)';
+      status = tr('لازم توافق على صلاحية Bluetooth (الأجهزة القريبة)');
       notifyListeners();
       return;
     }
 
     state = ObdState.connecting;
-    status = 'جاري الاتصال بـ ${settings.deviceName ?? address}…';
+    status = tr('جاري الاتصال بـ ${settings.deviceName ?? address}…');
     notifyListeners();
     try {
       await bt.connect(address);
       state = ObdState.initializing;
-      status = 'تهيئة الجهاز…';
+      status = tr('تهيئة الجهاز…');
       notifyListeners();
 
       adapterVersion = await elm.init();
@@ -120,23 +121,23 @@ class ObdService extends ChangeNotifier {
       fuelSource = FuelCalc.sourceFor(supported);
 
       if (supported.isEmpty) {
-        throw StateError('العربية ما ردتش. اتأكد إن الكونتاكت شغال.');
+        throw StateError(tr('العربية ما ردتش. اتأكد إن الكونتاكت شغال.'));
       }
 
       state = ObdState.connected;
-      status = 'متصل';
+      status = tr('متصل');
       notifyListeners();
       _startLoop();
     } catch (e) {
       await bt.disconnect().catchError((_) {});
-      _setDisconnected('فشل الاتصال: ${_short(e)}');
+      _setDisconnected(tr('فشل الاتصال: ${_short(e)}'));
     }
   }
 
   Future<void> disconnect() async {
     _running = false;
     await bt.disconnect().catchError((_) {});
-    _setDisconnected('غير متصل');
+    _setDisconnected(tr('غير متصل'));
   }
 
   void _setDisconnected(String msg) {
@@ -240,7 +241,7 @@ class ObdService extends ChangeNotifier {
         // Engine probably switched off (ECU stops answering).
         values.remove(Pids.rpm);
         values.remove(Pids.speed);
-        await Future<void>.delayed(const Duration(seconds: 2));
+        await Future<void>.delayed(Duration(seconds: 2));
       }
     }
   }
@@ -268,7 +269,7 @@ class ObdService extends ChangeNotifier {
 
   Future<String?> _readVin() async {
     try {
-      final resp = await elm.send('0902', timeout: const Duration(seconds: 4));
+      final resp = await elm.send('0902', timeout: Duration(seconds: 4));
       if (Elm327.isError(resp)) return null;
       for (final frame in _joinFrames(resp)) {
         final i = frame.indexOf('4902');
@@ -294,7 +295,7 @@ class ObdService extends ChangeNotifier {
 
     Future<String> ask(String cmd) async {
       try {
-        return await elm.send(cmd, timeout: const Duration(seconds: 3));
+        return await elm.send(cmd, timeout: Duration(seconds: 3));
       } catch (e) {
         return 'ERR: $e';
       }
@@ -303,7 +304,7 @@ class ObdService extends ChangeNotifier {
     // 1) SAE J1979 PID A6 (odometer, 0.1 km).
     var raw = await ask('01A6');
     var b = Elm327.mode01Bytes(raw, 0xA6);
-    out.add(ProbeResult('PID 01A6 (العداد القياسي)', '01A6', raw,
+    out.add(ProbeResult(tr('PID 01A6 (العداد القياسي)'), '01A6', raw,
         b.isNotEmpty && b.first.length >= 4 ? _u32(b.first) / 10 : null));
 
     // 2) ISO 27145 / UDS DID F4A6 (same value over service 22).
@@ -323,7 +324,7 @@ class ObdService extends ChangeNotifier {
     // Context: distance since codes cleared (almost always supported).
     raw = await ask('0131');
     b = Elm327.mode01Bytes(raw, 0x31);
-    out.add(ProbeResult('مسافة من مسح الأعطال (مش العداد)', '0131', raw,
+    out.add(ProbeResult(tr('مسافة من مسح الأعطال (مش العداد)'), '0131', raw,
         b.isNotEmpty && b.first.length >= 2
             ? (b.first[0] * 256 + b.first[1]).toDouble()
             : null));
@@ -346,7 +347,7 @@ class ObdService extends ChangeNotifier {
   // ---------- trouble codes ----------
 
   Future<List<String>> readDtcs() async {
-    final resp = await elm.send('03', timeout: const Duration(seconds: 4));
+    final resp = await elm.send('03', timeout: Duration(seconds: 4));
     if (!resp.contains('43')) return [];
     final isCan = _isCan;
     final codes = <String>{};
@@ -369,7 +370,7 @@ class ObdService extends ChangeNotifier {
   }
 
   Future<bool> clearDtcs() async {
-    final resp = await elm.send('04', timeout: const Duration(seconds: 4));
+    final resp = await elm.send('04', timeout: Duration(seconds: 4));
     return resp.contains('44');
   }
 
@@ -410,10 +411,10 @@ class ObdService extends ChangeNotifier {
   static String _short(Object e) {
     if (e is PlatformException) {
       final m = e.message ?? '';
-      if (m.contains('permission')) return 'صلاحية ناقصة: $m';
-      if (m.contains('Bluetooth is off')) return 'الـ Bluetooth مقفول';
+      if (m.contains('permission')) return tr('صلاحية ناقصة: $m');
+      if (m.contains('Bluetooth is off')) return tr('الـ Bluetooth مقفول');
       if (m.contains('read failed') || m.contains('timeout')) {
-        return 'الجهاز مش بيرد. اتأكد إنه متركب والكونتاكت شغال';
+        return tr('الجهاز مش بيرد. اتأكد إنه متركب والكونتاكت شغال');
       }
       return m.isEmpty ? e.code : m;
     }

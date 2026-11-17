@@ -5,6 +5,7 @@ import '../main.dart';
 import '../obd/obd_service.dart';
 import '../obd/pids.dart';
 import 'widgets.dart';
+import '../l10n.dart';
 
 /// Every PID the car reports as supported, with its live value.
 class ReadingsPage extends StatelessWidget {
@@ -15,59 +16,59 @@ class ReadingsPage extends StatelessWidget {
     final obd = App.obd;
     return Column(
       children: [
-        const ConnectionBar(),
+        ConnectionBar(),
         ListenableBuilder(
           listenable: obd,
           builder: (context, _) => ListTile(
             dense: true,
-            title: Text('${obd.supportedDefs.length} قراءة مدعومة'),
+            title: Text(tr('${obd.supportedDefs.length} قراءة مدعومة')),
             subtitle: Text(
-                'بروتوكول ${obd.protocol.isEmpty ? '—' : obd.protocol} • ${obd.adapterVersion}'),
+                tr('بروتوكول ${obd.protocol.isEmpty ? '—' : obd.protocol} • ${obd.adapterVersion}')),
             trailing: Row(mainAxisSize: MainAxisSize.min, children: [
               IconButton(
-                tooltip: 'فحص العداد',
+                tooltip: tr('فحص العداد'),
                 onPressed: obd.isConnected
                     ? () => Navigator.of(context).push(MaterialPageRoute(
-                        builder: (_) => const OdometerProbePage()))
+                        builder: (_) => OdometerProbePage()))
                     : null,
-                icon: const Icon(Icons.speed),
+                icon: Icon(Icons.speed),
               ),
               FilledButton.tonalIcon(
               onPressed: obd.isConnected
                   ? () => Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => const DtcPage()))
+                      builder: (_) => DtcPage()))
                   : null,
-              icon: const Icon(Icons.warning_amber),
-              label: const Text('الأعطال'),
+              icon: Icon(Icons.warning_amber),
+              label: Text(tr('الأعطال')),
             ),
             ]),
           ),
         ),
-        const Divider(height: 1),
+        Divider(height: 1),
         Expanded(
           child: ListenableBuilder(
             listenable: obd,
             builder: (context, _) {
               final defs = obd.supportedDefs;
               if (defs.isEmpty) {
-                return const Center(
-                    child: Text('اتصل بالعربية عشان تظهر القراءات'));
+                return Center(
+                    child: Text(tr('اتصل بالعربية عشان تظهر القراءات')));
               }
               return ListView(
                 children: [
                   if (obd.vin != null)
                     ListTile(
-                      leading: const Icon(Icons.badge_outlined),
-                      title: const Text('رقم الشاسيه (VIN)'),
+                      leading: Icon(Icons.badge_outlined),
+                      title: Text(tr('رقم الشاسيه (VIN)')),
                       subtitle: Text(obd.vin!,
                           textDirection: TextDirection.ltr),
                     ),
                   for (final d in defs)
                     ListTile(
-                      title: Text(d.name),
+                      title: Text(tr(d.name)),
                       subtitle: Text(d.hex),
                       trailing: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 190),
+                        constraints: BoxConstraints(maxWidth: 190),
                         child: Text(
                           _valueText(obd, d),
                           textAlign: TextAlign.end,
@@ -92,7 +93,7 @@ class ReadingsPage extends StatelessWidget {
   static String _valueText(ObdService obd, PidDef d) {
     final raw = obd.rawBytes[d.pid];
     if (raw == null) return '…';
-    if (d.text != null) return d.text!(raw);
+    if (d.text != null) return tr(d.text!(raw));
     return '${fmt(obd.values[d.pid], d.decimals)} ${d.unit}'.trim();
   }
 }
@@ -134,18 +135,18 @@ class _DtcPageState extends State<DtcPage> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('مسح الأعطال؟'),
-        content: const Text(
-            'هيتم مسح الأكواد ولمبة Check Engine، وكمان قراءات الـ readiness '
+        title: Text(tr('مسح الأعطال؟')),
+        content: Text(
+            tr('هيتم مسح الأكواد ولمبة Check Engine، وكمان قراءات الـ readiness '
             'هتتصفر. لو العطل لسه موجود هيرجع تاني. اعمل كده والموتور واقف '
-            'والكونتاكت شغال.'),
+            'والكونتاكت شغال.')),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('إلغاء')),
+              child: Text(tr('إلغاء'))),
           FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('امسح')),
+              child: Text(tr('امسح'))),
         ],
       ),
     );
@@ -155,7 +156,7 @@ class _DtcPageState extends State<DtcPage> {
       final done = await App.obd.clearDtcs();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(done ? 'تم المسح' : 'الكمبيوتر ما أكدش المسح')));
+          content: Text(done ? tr('تم المسح') : tr('الكمبيوتر ما أكدش المسح'))));
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     }
@@ -167,27 +168,27 @@ class _DtcPageState extends State<DtcPage> {
     final codes = _codes;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('أكواد الأعطال'),
+        title: Text(tr('أكواد الأعطال')),
         actions: [
           IconButton(
-              onPressed: _busy ? null : _read, icon: const Icon(Icons.refresh)),
+              onPressed: _busy ? null : _read, icon: Icon(Icons.refresh)),
         ],
       ),
       body: _busy && codes == null
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(child: CircularProgressIndicator())
           : ListView(
-              padding: const EdgeInsets.all(12),
+              padding: EdgeInsets.all(12),
               children: [
                 if (_error != null)
                   Card(
                       child: ListTile(
-                          leading: const Icon(Icons.error_outline),
+                          leading: Icon(Icons.error_outline),
                           title: Text(_error!))),
                 if (codes != null && codes.isEmpty)
                   Card(
                     child: ListTile(
                       leading: Icon(Icons.check_circle, color: AppColors.ok(context)),
-                      title: Text('مفيش أعطال مخزنة'),
+                      title: Text(tr('مفيش أعطال مخزنة')),
                     ),
                   ),
                 if (codes != null)
@@ -197,20 +198,20 @@ class _DtcPageState extends State<DtcPage> {
                         leading: Icon(Icons.warning_amber,
                             color: AppColors.warning(context)),
                         title: Text(c,
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 22, fontWeight: FontWeight.bold)),
                         subtitle: Text(_describe(c)),
                       ),
                     ),
-                const SizedBox(height: 16),
+                SizedBox(height: 16),
                 if (codes != null && codes.isNotEmpty)
                   FilledButton.icon(
                     style: FilledButton.styleFrom(
                         backgroundColor: AppColors.danger(context),
                         foregroundColor: Colors.white),
                     onPressed: _busy ? null : _clear,
-                    icon: const Icon(Icons.delete_forever),
-                    label: const Text('مسح الأعطال'),
+                    icon: Icon(Icons.delete_forever),
+                    label: Text(tr('مسح الأعطال')),
                   ),
               ],
             ),
@@ -219,13 +220,13 @@ class _DtcPageState extends State<DtcPage> {
 
   static String _describe(String code) {
     final system = switch (code[0]) {
-      'P' => 'محرك / فتيس',
-      'C' => 'شاسيه',
-      'B' => 'بودي',
-      _ => 'شبكة',
+      'P' => tr('محرك / فتيس'),
+      'C' => tr('شاسيه'),
+      'B' => tr('بودي'),
+      _ => tr('شبكة'),
     };
-    final generic = code.length > 1 && code[1] == '0' ? 'كود عام (SAE)' : 'كود خاص بالشركة';
-    return '$system • $generic — ابحث عن الكود لمعرفة التفاصيل';
+    final generic = code.length > 1 && code[1] == '0' ? tr('كود عام (SAE)') : tr('كود خاص بالشركة');
+    return tr('$system • $generic — ابحث عن الكود لمعرفة التفاصيل');
   }
 }
 
@@ -267,48 +268,48 @@ class _OdometerProbePageState extends State<OdometerProbePage> {
     final found = results?.where((r) => r.km != null && r.cmd != '0131');
     return Scaffold(
       appBar: AppBar(
-        title: const Text('فحص العداد'),
+        title: Text(tr('فحص العداد')),
         actions: [
           IconButton(
-            tooltip: 'نسخ النتيجة',
+            tooltip: tr('نسخ النتيجة'),
             onPressed: results == null
                 ? null
                 : () {
                     Clipboard.setData(ClipboardData(text: _report));
                     ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('اتنسخت')));
+                        SnackBar(content: Text(tr('اتنسخت'))));
                   },
-            icon: const Icon(Icons.copy),
+            icon: Icon(Icons.copy),
           ),
           IconButton(
               onPressed: _busy ? null : _run,
-              icon: const Icon(Icons.refresh)),
+              icon: Icon(Icons.refresh)),
         ],
       ),
       body: results == null
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(child: CircularProgressIndicator())
           : ListView(
-              padding: const EdgeInsets.all(12),
+              padding: EdgeInsets.all(12),
               children: [
                 Card(
                   color: Theme.of(context).colorScheme.primaryContainer,
                   child: ListTile(
                     title: Text(found != null && found.isNotEmpty
-                        ? 'العداد: ${fmt(found.first.km, 1)} كم'
-                        : 'العربية ما ردتش بقراءة العداد بالطرق القياسية'),
-                    subtitle: const Text(
-                        'قارن الرقم بعداد التابلوه. لو مفيش نتيجة، انسخ الردود وابعتها.'),
+                        ? tr('العداد: ${fmt(found.first.km, 1)} كم')
+                        : tr('العربية ما ردتش بقراءة العداد بالطرق القياسية')),
+                    subtitle: Text(
+                        tr('قارن الرقم بعداد التابلوه. لو مفيش نتيجة، انسخ الردود وابعتها.')),
                   ),
                 ),
                 for (final r in results)
                   Card(
                     child: ListTile(
                       title: Text(r.label),
-                      subtitle: Text('${r.cmd}\n${r.raw.isEmpty ? '(فاضي)' : r.raw}',
+                      subtitle: Text(tr('${r.cmd}\n${r.raw.isEmpty ? '(فاضي)' : r.raw}'),
                           textDirection: TextDirection.ltr),
                       isThreeLine: true,
                       trailing: Text(
-                          r.km == null ? 'مش مدعوم' : '${fmt(r.km, 1)} كم',
+                          r.km == null ? tr('مش مدعوم') : tr('${fmt(r.km, 1)} كم'),
                           style: Theme.of(context).textTheme.titleMedium),
                     ),
                   ),

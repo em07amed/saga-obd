@@ -6,6 +6,7 @@ import '../obd/bt_channel.dart';
 import '../settings.dart';
 import 'vehicle_editor.dart';
 import 'widgets.dart';
+import '../l10n.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -17,43 +18,60 @@ class SettingsPage extends StatelessWidget {
       listenable: s,
       builder: (context, _) => ListView(
         children: [
-          const _Header('المظهر'),
+          _Header(tr('المظهر')),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: SegmentedButton<String>(
-              segments: const [
+              showSelectedIcon: false,
+              segments: [
+                ButtonSegment(
+                    value: 'sport',
+                    label: Text(tr('رياضي')),
+                    icon: Icon(Icons.sports_score)),
                 ButtonSegment(
                     value: 'system',
-                    label: Text('تلقائي'),
+                    label: Text(tr('تلقائي')),
                     icon: Icon(Icons.brightness_auto)),
                 ButtonSegment(
                     value: 'light',
-                    label: Text('فاتح'),
+                    label: Text(tr('فاتح')),
                     icon: Icon(Icons.light_mode)),
                 ButtonSegment(
                     value: 'dark',
-                    label: Text('داكن'),
+                    label: Text(tr('داكن')),
                     icon: Icon(Icons.dark_mode)),
               ],
               selected: {s.themeMode},
               onSelectionChanged: (sel) => s.setThemeMode(sel.first),
             ),
           ),
-          const _Header('جهاز الـ OBD'),
+          _Header(tr('اللغة')),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'ar', label: Text('العربية')),
+                ButtonSegment(value: 'en', label: Text('English')),
+              ],
+              selected: {s.lang},
+              onSelectionChanged: (sel) => s.setLang(sel.first),
+            ),
+          ),
+          _Header(tr('جهاز الـ OBD')),
           ListTile(
-            leading: const Icon(Icons.bluetooth_searching),
-            title: Text(s.deviceName ?? 'لم يتم الاختيار'),
+            leading: Icon(Icons.bluetooth_searching),
+            title: Text(s.deviceName ?? tr('لم يتم الاختيار')),
             subtitle: Text(s.deviceAddress ??
-                'اعمل Pair للجهاز من إعدادات Bluetooth في الموبايل الأول'),
-            trailing: const Icon(Icons.chevron_left),
+                tr('اعمل Pair للجهاز من إعدادات Bluetooth في الموبايل الأول')),
+            trailing: Icon(Icons.chevron_left),
             onTap: () => _pickDevice(context),
           ),
           SwitchListTile(
-            title: const Text('اتصال تلقائي عند فتح التطبيق'),
+            title: Text(tr('اتصال تلقائي عند فتح التطبيق')),
             value: s.autoConnect,
             onChanged: s.setAutoConnect,
           ),
-          const _Header('العربيات'),
+          _Header(tr('العربيات')),
           for (final v in s.vehicles)
             ListTile(
               leading: Icon(
@@ -67,54 +85,54 @@ class SettingsPage extends StatelessWidget {
               title: Text(v.name),
               subtitle: v.subtitle.isEmpty ? null : Text(v.subtitle),
               trailing: IconButton(
-                tooltip: 'تعديل',
-                icon: const Icon(Icons.edit_outlined),
+                tooltip: tr('تعديل'),
+                icon: Icon(Icons.edit_outlined),
                 onPressed: () => Navigator.of(context).push(MaterialPageRoute(
                     builder: (_) => VehicleEditor(vehicle: v))),
               ),
               onTap: () => s.setActiveVehicle(v.id!),
             ),
           ListTile(
-            leading: const Icon(Icons.add),
-            title: const Text('إضافة عربية'),
+            leading: Icon(Icons.add),
+            title: Text(tr('إضافة عربية')),
             onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => const VehicleEditor())),
+                builder: (_) => VehicleEditor())),
           ),
-          _Header('بيانات ${s.vehicle.name}'),
+          _Header(tr('بيانات ${s.vehicle.name}')),
           _NumberTile(
               keyName: 'tankLiters',
-              label: 'سعة التانك',
-              unit: 'لتر',
+              label: tr('سعة التانك'),
+              unit: tr('لتر'),
               value: s.tankLiters),
           _NumberTile(
               keyName: 'displacementL',
-              label: 'سعة الموتور',
-              unit: 'لتر',
+              label: tr('سعة الموتور'),
+              unit: tr('لتر'),
               value: s.displacementL),
           _NumberTile(
               keyName: 'volumetricEff',
-              label: 'الكفاءة الحجمية (VE)',
+              label: tr('الكفاءة الحجمية (VE)'),
               unit: '',
               value: s.volumetricEff,
-              help: 'بتستخدم بس لو العربية مفيهاش حساس MAF. عايرها من تفويلة حقيقية.'),
+              help: tr('بتستخدم بس لو العربية مفيهاش حساس MAF. عايرها من تفويلة حقيقية.')),
           ListTile(
-            leading: const Icon(Icons.science_outlined),
-            title: const Text('معايرة الاستهلاك من تفويلة'),
-            subtitle: const Text('قارن اللترات اللي فوّلتها باللي التطبيق حسبه'),
+            leading: Icon(Icons.science_outlined),
+            title: Text(tr('معايرة الاستهلاك من تفويلة')),
+            subtitle: Text(tr('قارن اللترات اللي فوّلتها باللي التطبيق حسبه')),
             onTap: () => _calibrate(context),
           ),
           _NumberTile(
               keyName: 'defaultL100',
-              label: 'متوسط استهلاك افتراضي (لحساب المسافة المتبقية)',
-              unit: 'ل/100كم',
+              label: tr('متوسط استهلاك افتراضي (لحساب المسافة المتبقية)'),
+              unit: tr('ل/100كم'),
               value: s.defaultL100),
-          const _Header('التكلفة'),
+          _Header(tr('التكلفة')),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: SegmentedButton<String>(
               segments: [
                 for (final g in AppSettings.gradePrices.keys)
-                  ButtonSegment(value: g, label: Text('بنزين $g')),
+                  ButtonSegment(value: g, label: Text(tr('بنزين $g'))),
               ],
               selected: {s.fuelGrade},
               onSelectionChanged: (sel) => s.setFuelGrade(sel.first),
@@ -122,11 +140,11 @@ class SettingsPage extends StatelessWidget {
           ),
           _NumberTile(
               keyName: 'fuelPrice',
-              label: 'سعر لتر البنزين',
-              unit: 'ج.م',
+              label: tr('سعر لتر البنزين'),
+              unit: tr('ج.م'),
               value: s.fuelPrice,
-              help: 'السعر الرسمي بيتحط تلقائي لما تختار النوع. لو اتغير عدّله من هنا؛ كل رحلة بتتسجل بالسعر وقت بدايتها.'),
-          const SizedBox(height: 24),
+              help: tr('السعر الرسمي بيتحط تلقائي لما تختار النوع. لو اتغير عدّله من هنا؛ كل رحلة بتتسجل بالسعر وقت بدايتها.')),
+          SizedBox(height: 24),
         ],
       ),
     );
@@ -139,7 +157,7 @@ class SettingsPage extends StatelessWidget {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('مش قادر أقرا الأجهزة: $e')));
+            SnackBar(content: Text(tr('مش قادر أقرا الأجهزة: $e'))));
       }
       return;
     }
@@ -150,14 +168,14 @@ class SettingsPage extends StatelessWidget {
         child: ListView(
           shrinkWrap: true,
           children: [
-            const ListTile(
-                title: Text('الأجهزة المقترنة'),
-                subtitle: Text('جهاز ELM327 غالباً اسمه OBDII أو V-LINK')),
+            ListTile(
+                title: Text(tr('الأجهزة المقترنة')),
+                subtitle: Text(tr('جهاز ELM327 غالباً اسمه OBDII أو V-LINK'))),
             if (devices.isEmpty)
-              const ListTile(title: Text('مفيش أجهزة. اعمل Pair الأول.')),
+              ListTile(title: Text(tr('مفيش أجهزة. اعمل Pair الأول.'))),
             for (final d in devices)
               ListTile(
-                leading: const Icon(Icons.bluetooth),
+                leading: Icon(Icons.bluetooth),
                 title: Text(d.name),
                 subtitle: Text(d.address),
                 onTap: () => Navigator.pop(ctx, d),
@@ -177,33 +195,33 @@ class SettingsPage extends StatelessWidget {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('معايرة الـ VE'),
+        title: Text(tr('معايرة الـ VE')),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
-                'فوّل التانك فُل، امشي مشوار طويل، وفوّل فُل تاني. '
+            Text(
+                tr('فوّل التانك فُل، امشي مشوار طويل، وفوّل فُل تاني. '
                 'اكتب اللترات الحقيقية من البنزينة، وإجمالي لترات الرحلات '
-                'اللي بين التفويلتين من التطبيق.'),
+                'اللي بين التفويلتين من التطبيق.')),
             TextField(
               controller: actual,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'لترات البنزينة'),
+              keyboardType: TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(labelText: tr('لترات البنزينة')),
             ),
             TextField(
               controller: computed,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'لترات التطبيق'),
+              keyboardType: TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(labelText: tr('لترات التطبيق')),
             ),
           ],
         ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('إلغاء')),
+              child: Text(tr('إلغاء'))),
           FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('احسب')),
+              child: Text(tr('احسب'))),
         ],
       ),
     );
@@ -216,7 +234,7 @@ class SettingsPage extends StatelessWidget {
     await s.setNumber('volumetricEff', newVe);
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('الـ VE الجديدة: ${newVe.toStringAsFixed(3)}')));
+          content: Text(tr('الـ VE الجديدة: ${newVe.toStringAsFixed(3)}'))));
     }
   }
 }
@@ -227,7 +245,7 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
+        padding: EdgeInsets.fromLTRB(16, 20, 16, 4),
         child: Text(text,
             style: TextStyle(
                 color: Theme.of(context).colorScheme.primary,
@@ -267,7 +285,7 @@ class _NumberTile extends StatelessWidget {
               controller: c,
               autofocus: true,
               keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
+                  TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))
               ],
@@ -276,10 +294,10 @@ class _NumberTile extends StatelessWidget {
             actions: [
               TextButton(
                   onPressed: () => Navigator.pop(ctx),
-                  child: const Text('إلغاء')),
+                  child: Text(tr('إلغاء'))),
               FilledButton(
                   onPressed: () => Navigator.pop(ctx, double.tryParse(c.text)),
-                  child: const Text('حفظ')),
+                  child: Text(tr('حفظ'))),
             ],
           ),
         );
