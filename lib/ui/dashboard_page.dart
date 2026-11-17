@@ -105,9 +105,11 @@ class DashboardPage extends StatelessWidget {
                   unit: 'كم',
                   sub: App.maintenance.odometerKm == null
                       ? 'اكتب رقم التابلوه من تاب الصيانة'
-                      : App.maintenance.odometerFromObd
-                          ? 'من كمبيوتر العربية'
-                          : 'تقديري • بيزيد مع الرحلات',
+                      : switch (App.maintenance.odometerSource) {
+                          'obd' => 'من كمبيوتر العربية',
+                          'ecu' => 'من كمبيوتر العربية • لحظي',
+                          _ => 'تقديري • بيزيد مع الرحلات',
+                        },
                 ),
                 StatTile(
                   label: 'البطارية',

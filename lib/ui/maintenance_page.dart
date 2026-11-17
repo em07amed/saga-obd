@@ -21,7 +21,7 @@ class MaintenancePage extends StatelessWidget {
         label: const Text('صيانة جديدة'),
       ),
       body: ListenableBuilder(
-        listenable: m,
+        listenable: Listenable.merge([m, App.obd]),
         builder: (context, _) {
           final due = m.due;
           return ListView(
@@ -108,9 +108,11 @@ class _OdometerCard extends StatelessWidget {
                   Text(
                     km == null
                         ? 'اكتب رقم عداد التابلوه مرة واحدة'
-                        : m.odometerFromObd
-                            ? 'من كمبيوتر العربية'
-                            : 'تقديري: آخر قراءة + الرحلات المسجلة',
+                        : switch (m.odometerSource) {
+                            'obd' => 'من كمبيوتر العربية',
+                            'ecu' => 'من كمبيوتر العربية (بعد المعايرة) • لحظي',
+                            _ => 'تقديري: آخر قراءة + الرحلات المسجلة',
+                          },
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
@@ -151,7 +153,7 @@ class _OdometerCard extends StatelessWidget {
         ],
       ),
     );
-    if (v != null && v > 0) await App.settings.setOdometer(v);
+    if (v != null && v > 0) await App.maintenance.setDashboardOdometer(v);
   }
 }
 

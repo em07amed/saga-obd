@@ -138,6 +138,20 @@ class AppSettings extends ChangeNotifier {
     await _saveActive();
   }
 
+  /// Dashboard odometer minus PID 0131 (distance since codes cleared),
+  /// learned once per vehicle. Null until calibrated.
+  double? get odoOffset => _p.getDouble('odoOffset_${vehicle.id}');
+
+  Future<void> setOdoOffset(double? v) async {
+    final key = 'odoOffset_${vehicle.id}';
+    if (v == null) {
+      await _p.remove(key);
+    } else {
+      await _p.setDouble(key, v);
+    }
+    notifyListeners();
+  }
+
   Future<void> setOdometer(double km) async {
     vehicle.odoBaseKm = km;
     vehicle.odoBaseAt = DateTime.now();

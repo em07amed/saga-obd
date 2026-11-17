@@ -71,6 +71,11 @@ class ReadingsPage extends StatelessWidget {
                         child: Text(
                           _valueText(obd, d),
                           textAlign: TextAlign.end,
+                          // Numbers with units read left-to-right ("841 RPM").
+                          textDirection:
+                              d.text == null || !Pids.byId.containsKey(d.pid)
+                                  ? TextDirection.ltr
+                                  : null,
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                       ),

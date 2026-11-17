@@ -95,18 +95,62 @@ class MaintenanceService extends ChangeNotifier {
 
   bool get odometerFromObd => (obd.values[Pids.odometer] ?? 0) > 0;
 
-  /// Live odometer: the car's own value when reported, otherwise the
-  /// estimate plus the trip in progress.
+  /// PID 0131 (distance since trouble codes were cleared) plus a learned
+  /// offset. On a car whose codes were never cleared this tracks the real
+  /// odometer to within a few km, updated live by the ECU.
+  double? get _fromClearedDistance {
+    final d = obd.values[0x31];
+    final off = settings.odoOffset;
+    if (d == null || off == null) return null;
+    final km = d + off;
+    // If codes were cleared since calibration, 0131 restarts from 0 and
+    // the result drops below the last known reading: stop trusting it.
+    final base = settings.odoBaseKm;
+    if (base != null && km < base - 5) return null;
+    return km;
+  }
+
+  /// Where the odometer value comes from: 'obd', 'ecu', 'estimate' or null.
+  String? get odometerSource {
+    if (odometerFromObd) return 'obd';
+    if (_fromClearedDistance != null) return 'ecu';
+    if (_estimateBase != null) return 'estimate';
+    return null;
+  }
+
+  /// Live odometer: the car's own value when reported, then the calibrated
+  /// ECU distance, otherwise the estimate plus the trip in progress.
   double? get odometerKm {
     if (odometerFromObd) return obd.values[Pids.odometer];
+    final ecu = _fromClearedDistance;
+    if (ecu != null) return ecu;
     final base = _estimateBase;
     if (base == null) return null;
     return base + (trips.active ? trips.distanceKm : 0);
   }
 
+  /// User typed the dashboard reading: store it and, if the ECU reports
+  /// 0131 right now, learn the offset so the odometer follows the car.
+  Future<void> setDashboardOdometer(double km) async {
+    final d = obd.values[0x31];
+    if (d != null) await settings.setOdoOffset(km - d);
+    await settings.setOdometer(km);
+  }
+
+  /// First time 0131 shows up with no offset yet, derive one from the
+  /// estimate so the user doesn't have to re-enter the reading.
+  void _onObd() {
+    final d = obd.values[0x31];
+    if (d == null || settings.odoOffset != null || odometerFromObd) return;
+    final est = _estimateBase;
+    if (est == null) return;
+    settings.setOdoOffset(est + (trips.active ? trips.distanceKm : 0) - d);
+  }
+
   MaintenanceService(this.db, this.settings, this.obd, this.trips) {
     trips.addListener(_onTrips);
     settings.addListener(_onSettings);
+    obd.addListener(_onObd);
   }
 
   int? _vehicleId;
@@ -202,6 +246,7 @@ class MaintenanceService extends ChangeNotifier {
   void dispose() {
     trips.removeListener(_onTrips);
     settings.removeListener(_onSettings);
+    obd.removeListener(_onObd);
     super.dispose();
   }
 }
