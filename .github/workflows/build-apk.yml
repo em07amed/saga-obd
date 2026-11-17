@@ -28,7 +28,7 @@ jobs:
       - name: Create scaffold and overlay sources
         run: |
           flutter create --org com.ezzat --platforms android obd_saga
-          cp -r src/lib src/test src/pubspec.yaml obd_saga/
+          cp -r src/lib src/test src/assets src/pubspec.yaml obd_saga/
           cp src/android/app/src/main/AndroidManifest.xml obd_saga/android/app/src/main/
           mkdir -p obd_saga/android/app/src/main/kotlin/com/ezzat/obd_saga
           cp src/android/app/src/main/kotlin/com/ezzat/obd_saga/MainActivity.kt \
@@ -37,6 +37,10 @@ jobs:
       - name: Get packages
         working-directory: obd_saga
         run: flutter pub get
+
+      - name: Generate launcher icons
+        working-directory: obd_saga
+        run: dart run flutter_launcher_icons
 
       - name: Analyze
         working-directory: obd_saga
