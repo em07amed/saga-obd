@@ -99,7 +99,9 @@ class MainActivity : FlutterActivity() {
             try {
                 val ad = adapter() ?: throw IllegalStateException("Bluetooth not available")
                 if (!ad.isEnabled) throw IllegalStateException("Bluetooth is off")
-                ad.cancelDiscovery()
+                // cancelDiscovery() needs BLUETOOTH_SCAN on Android 12+; we never
+                // scan (paired devices only), so skip it if not permitted.
+                try { ad.cancelDiscovery() } catch (_: SecurityException) {}
                 val device = ad.getRemoteDevice(address)
                 val s = openSocket(device)
                 socket = s

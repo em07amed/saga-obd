@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../settings.dart';
 import 'bt_channel.dart';
@@ -67,6 +69,12 @@ class ObdService extends ChangeNotifier {
       return;
     }
     if (state != ObdState.disconnected) return;
+
+    if (!await Permission.bluetoothConnect.request().isGranted) {
+      status = 'لازم توافق على صلاحية Bluetooth (الأجهزة القريبة)';
+      notifyListeners();
+      return;
+    }
 
     state = ObdState.connecting;
     status = 'جاري الاتصال بـ ${settings.deviceName ?? address}…';
@@ -286,6 +294,15 @@ class ObdService extends ChangeNotifier {
   }
 
   static String _short(Object e) {
+    if (e is PlatformException) {
+      final m = e.message ?? '';
+      if (m.contains('permission')) return 'صلاحية ناقصة: $m';
+      if (m.contains('Bluetooth is off')) return 'الـ Bluetooth مقفول';
+      if (m.contains('read failed') || m.contains('timeout')) {
+        return 'الجهاز مش بيرد. اتأكد إنه متركب والكونتاكت شغال';
+      }
+      return m.isEmpty ? e.code : m;
+    }
     final s = e.toString();
     return s.length > 80 ? '${s.substring(0, 80)}…' : s;
   }

@@ -50,7 +50,7 @@ class ConnectionBar extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(obd.status,
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                    maxLines: 3, overflow: TextOverflow.ellipsis),
               ),
               if (busy)
                 const SizedBox(
