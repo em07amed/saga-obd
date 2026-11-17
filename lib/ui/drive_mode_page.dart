@@ -86,7 +86,7 @@ class _DriveModePageState extends State<DriveModePage> {
                         icon: const Icon(Icons.close),
                       ),
                       Expanded(
-                        child: Text(obd.status,
+                        child: Text('${s.vehicle.name} • ${obd.status}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(color: scheme.onSurfaceVariant)),

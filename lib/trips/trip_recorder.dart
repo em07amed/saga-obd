@@ -104,7 +104,7 @@ class TripRecorder extends ChangeNotifier {
   }
 
   Future<void> _start(DateTime at) async {
-    tripId = await db.startTrip(at, settings.fuelPrice);
+    tripId = await db.startTrip(at, settings.fuelPrice, settings.vehicle.id ?? 0);
     startedAt = at;
     obdKm = 0;
     gpsKm = 0;

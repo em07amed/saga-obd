@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../main.dart';
 import '../obd/bt_channel.dart';
 import '../settings.dart';
+import 'vehicle_editor.dart';
 import 'widgets.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -52,7 +53,34 @@ class SettingsPage extends StatelessWidget {
             value: s.autoConnect,
             onChanged: s.setAutoConnect,
           ),
-          const _Header('العربية'),
+          const _Header('العربيات'),
+          for (final v in s.vehicles)
+            ListTile(
+              leading: Icon(
+                v.id == s.vehicle.id
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked,
+                color: v.id == s.vehicle.id
+                    ? Theme.of(context).colorScheme.primary
+                    : null,
+              ),
+              title: Text(v.name),
+              subtitle: v.subtitle.isEmpty ? null : Text(v.subtitle),
+              trailing: IconButton(
+                tooltip: 'تعديل',
+                icon: const Icon(Icons.edit_outlined),
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => VehicleEditor(vehicle: v))),
+              ),
+              onTap: () => s.setActiveVehicle(v.id!),
+            ),
+          ListTile(
+            leading: const Icon(Icons.add),
+            title: const Text('إضافة عربية'),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => const VehicleEditor())),
+          ),
+          _Header('بيانات ${s.vehicle.name}'),
           _NumberTile(
               keyName: 'tankLiters',
               label: 'سعة التانك',

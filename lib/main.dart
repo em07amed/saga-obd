@@ -31,27 +31,27 @@ class App {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('ar');
-  App.settings = AppSettings();
-  await App.settings.load();
   App.db = TripDb();
   await App.db.open();
+  App.settings = AppSettings();
+  await App.settings.load(App.db);
   App.obd = ObdService(BtChannel(), App.settings);
   App.trips = TripRecorder(App.obd, App.db, App.settings);
   App.maintenance =
       MaintenanceService(App.db, App.settings, App.obd, App.trips);
   await App.maintenance.load();
-  runApp(const SagaObdApp());
+  runApp(const CarObdApp());
 }
 
-class SagaObdApp extends StatelessWidget {
-  const SagaObdApp({super.key});
+class CarObdApp extends StatelessWidget {
+  const CarObdApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: App.settings,
       builder: (context, _) => MaterialApp(
-      title: 'Saga OBD',
+      title: 'Car OBD',
       debugShowCheckedModeBanner: false,
       locale: const Locale('ar'),
       supportedLocales: const [Locale('ar'), Locale('en')],

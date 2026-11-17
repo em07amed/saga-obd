@@ -27,20 +27,28 @@ class _TripsPageState extends State<TripsPage> {
     super.initState();
     _reload();
     App.trips.addListener(_onRecorder);
+    App.settings.addListener(_onRecorder);
   }
 
+  int? _vehicle;
+
   void _onRecorder() {
-    if (App.trips.finishedCount != _seen) setState(_reload);
+    if (App.trips.finishedCount != _seen ||
+        App.settings.vehicle.id != _vehicle) {
+      setState(_reload);
+    }
   }
 
   void _reload() {
     _seen = App.trips.finishedCount;
-    _future = App.db.trips();
+    _vehicle = App.settings.vehicle.id;
+    _future = App.db.trips(_vehicle ?? 0);
   }
 
   @override
   void dispose() {
     App.trips.removeListener(_onRecorder);
+    App.settings.removeListener(_onRecorder);
     super.dispose();
   }
 
@@ -113,7 +121,7 @@ class _MonthSummary extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('الشهر ده (${month.length} رحلة)',
+            Text('${App.settings.vehicle.name} • الشهر ده (${month.length} رحلة)',
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             Text('${fmt(km)} كم • ${fmt(fuel, 1)} لتر • ${fmt(cost)} ج.م'),

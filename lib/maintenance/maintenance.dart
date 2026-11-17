@@ -106,7 +106,16 @@ class MaintenanceService extends ChangeNotifier {
 
   MaintenanceService(this.db, this.settings, this.obd, this.trips) {
     trips.addListener(_onTrips);
-    settings.addListener(refreshOdometer);
+    settings.addListener(_onSettings);
+  }
+
+  int? _vehicleId;
+  void _onSettings() {
+    if (settings.vehicle.id != _vehicleId) {
+      load(); // switched car: reload its history
+    } else {
+      refreshOdometer();
+    }
   }
 
   int _seenTrips = -1;
@@ -118,7 +127,11 @@ class MaintenanceService extends ChangeNotifier {
   }
 
   Future<void> load() async {
-    final rows = await db.raw.query('maintenance', orderBy: 'date DESC, id DESC');
+    _vehicleId = settings.vehicle.id;
+    final rows = await db.raw.query('maintenance',
+        where: 'vehicle_id = ?',
+        whereArgs: [_vehicleId],
+        orderBy: 'date DESC, id DESC');
     entries = rows.map(MaintenanceEntry.fromRow).toList();
     await refreshOdometer();
   }
@@ -127,7 +140,8 @@ class MaintenanceService extends ChangeNotifier {
   /// dashboard reading the user entered plus trips logged since then.
   Future<void> refreshOdometer() async {
     if (settings.odoBaseKm != null && settings.odoBaseAt != null) {
-      _estimateBase = settings.odoBaseKm! + await db.kmSince(settings.odoBaseAt!);
+      _estimateBase = settings.odoBaseKm! +
+          await db.kmSince(settings.odoBaseAt!, settings.vehicle.id ?? 0);
     } else {
       _estimateBase = null;
     }
@@ -136,7 +150,8 @@ class MaintenanceService extends ChangeNotifier {
 
   Future<void> save(MaintenanceEntry e) async {
     if (e.id == null) {
-      await db.raw.insert('maintenance', e.toRow());
+      await db.raw.insert(
+          'maintenance', {...e.toRow(), 'vehicle_id': settings.vehicle.id});
     } else {
       await db.raw.update('maintenance', e.toRow(),
           where: 'id = ?', whereArgs: [e.id]);
@@ -186,7 +201,7 @@ class MaintenanceService extends ChangeNotifier {
   @override
   void dispose() {
     trips.removeListener(_onTrips);
-    settings.removeListener(refreshOdometer);
+    settings.removeListener(_onSettings);
     super.dispose();
   }
 }

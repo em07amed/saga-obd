@@ -18,7 +18,7 @@
     <uses-feature android:name="android.hardware.bluetooth" android:required="true" />
 
     <application
-        android:label="Saga OBD"
+        android:label="Car OBD"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

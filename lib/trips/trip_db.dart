@@ -1,6 +1,8 @@
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
+import '../vehicle.dart';
+
 class Trip {
   final int id;
   final DateTime startedAt;
@@ -77,10 +79,19 @@ class TripDb {
 
   Future<void> open() async {
     final path = p.join(await getDatabasesPath(), 'trips.db');
-    _db = await openDatabase(path, version: 2,
+    _db = await openDatabase(path, version: 3,
         onUpgrade: (db, oldV, newV) async {
-      if (oldV < 2) await _createMaintenance(db);
+      if (oldV < 2) await _createMaintenance(db); // already has vehicle_id
+      if (oldV < 3) {
+        await _createVehicles(db);
+        await db.execute('ALTER TABLE trips ADD COLUMN vehicle_id INTEGER');
+        if (oldV >= 2) {
+          await db
+              .execute('ALTER TABLE maintenance ADD COLUMN vehicle_id INTEGER');
+        }
+      }
     }, onCreate: (db, _) async {
+      await _createVehicles(db);
       await db.execute('''
         CREATE TABLE trips(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -92,7 +103,8 @@ class TripDb {
           max_speed REAL NOT NULL DEFAULT 0,
           idle_sec INTEGER NOT NULL DEFAULT 0,
           max_coolant REAL NOT NULL DEFAULT 0,
-          fuel_price REAL NOT NULL DEFAULT 0
+          fuel_price REAL NOT NULL DEFAULT 0,
+          vehicle_id INTEGER
         )''');
       await db.execute('''
         CREATE TABLE samples(
@@ -117,16 +129,59 @@ class TripDb {
           cost REAL NOT NULL DEFAULT 0,
           notes TEXT,
           next_km REAL,
-          next_date INTEGER
+          next_date INTEGER,
+          vehicle_id INTEGER
         )''');
+
+  static Future<void> _createVehicles(Database db) => db.execute('''
+        CREATE TABLE vehicles(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          make TEXT, model TEXT, year INTEGER,
+          tank_l REAL NOT NULL,
+          displacement_l REAL NOT NULL,
+          ve REAL NOT NULL,
+          fuel_grade TEXT NOT NULL,
+          fuel_price REAL NOT NULL,
+          default_l100 REAL NOT NULL,
+          odo_base_km REAL,
+          odo_base_at INTEGER
+        )''');
+
+  // ---------- vehicles ----------
+
+  Future<List<Vehicle>> vehicles() async =>
+      (await _db.query('vehicles', orderBy: 'id')).map(Vehicle.fromRow).toList();
+
+  Future<int> insertVehicle(Vehicle v) => _db.insert('vehicles', v.toRow());
+
+  Future<void> updateVehicle(Vehicle v) =>
+      _db.update('vehicles', v.toRow(), where: 'id = ?', whereArgs: [v.id]);
+
+  /// Attaches history recorded before vehicles existed to [vehicleId].
+  Future<void> adoptOrphans(int vehicleId) async {
+    await _db.update('trips', {'vehicle_id': vehicleId},
+        where: 'vehicle_id IS NULL');
+    await _db.update('maintenance', {'vehicle_id': vehicleId},
+        where: 'vehicle_id IS NULL');
+  }
+
+  Future<void> deleteVehicle(int id) async {
+    await _db.rawDelete(
+        'DELETE FROM samples WHERE trip_id IN (SELECT id FROM trips WHERE vehicle_id = ?)',
+        [id]);
+    await _db.delete('trips', where: 'vehicle_id = ?', whereArgs: [id]);
+    await _db.delete('maintenance', where: 'vehicle_id = ?', whereArgs: [id]);
+    await _db.delete('vehicles', where: 'id = ?', whereArgs: [id]);
+  }
 
   Database get raw => _db;
 
   /// Sum of trip distances that started at or after [since].
-  Future<double> kmSince(DateTime since) async {
+  Future<double> kmSince(DateTime since, int vehicleId) async {
     final rows = await _db.query('trips',
-        where: 'started_at >= ? AND ended_at IS NOT NULL',
-        whereArgs: [since.millisecondsSinceEpoch]);
+        where: 'started_at >= ? AND ended_at IS NOT NULL AND vehicle_id = ?',
+        whereArgs: [since.millisecondsSinceEpoch, vehicleId]);
     return rows
         .map(Trip.fromRow)
         .fold<double>(0, (s, t) => s + t.distanceKm);
@@ -145,9 +200,11 @@ class TripDb {
     }
   }
 
-  Future<int> startTrip(DateTime at, double fuelPrice) => _db.insert('trips', {
+  Future<int> startTrip(DateTime at, double fuelPrice, int vehicleId) =>
+      _db.insert('trips', {
         'started_at': at.millisecondsSinceEpoch,
         'fuel_price': fuelPrice,
+        'vehicle_id': vehicleId,
       });
 
   Future<void> updateTrip(int id, Map<String, Object?> values) =>
@@ -170,8 +227,11 @@ class TripDb {
     await batch.commit(noResult: true);
   }
 
-  Future<List<Trip>> trips() async {
-    final rows = await _db.query('trips', orderBy: 'started_at DESC');
+  Future<List<Trip>> trips(int vehicleId) async {
+    final rows = await _db.query('trips',
+        where: 'vehicle_id = ?',
+        whereArgs: [vehicleId],
+        orderBy: 'started_at DESC');
     return rows.map(Trip.fromRow).toList();
   }
 
