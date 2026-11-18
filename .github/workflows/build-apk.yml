@@ -63,6 +63,14 @@ jobs:
         working-directory: obd_saga
         run: flutter build apk --release
 
+      # Play Store needs an Android App Bundle, signed with the same
+      # (upload) key; Google re-signs it for delivery.
+      - name: Build App Bundle for Google Play
+        working-directory: obd_saga
+        run: |
+          flutter build appbundle --release
+          grep -o 'targetSdk[^,]*' build/app/intermediates/merged_manifest/release/processReleaseMainManifest/AndroidManifest.xml || true
+
       - uses: actions/upload-artifact@v4
         with:
           name: saga-obd-apk
@@ -72,7 +80,9 @@ jobs:
       # stable download link: /releases/latest
       - name: Publish release
         if: github.ref == 'refs/heads/main'
-        run: cp obd_saga/build/app/outputs/flutter-apk/app-release.apk car-obd.apk
+        run: |
+          cp obd_saga/build/app/outputs/flutter-apk/app-release.apk car-obd.apk
+          cp obd_saga/build/app/outputs/bundle/release/app-release.aab car-obd.aab
 
       - uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/main'
@@ -80,5 +90,7 @@ jobs:
           tag_name: build-${{ github.run_number }}
           name: Car OBD build ${{ github.run_number }}
           body: ${{ github.event.head_commit.message }}
-          files: car-obd.apk
+          files: |
+            car-obd.apk
+            car-obd.aab
           make_latest: true
