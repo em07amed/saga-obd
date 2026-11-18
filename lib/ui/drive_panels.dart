@@ -192,7 +192,7 @@ class _PhonePanelState extends State<PhonePanel> {
             .where((c) =>
                 c.name.toLowerCase().contains(q) ||
                 c.number.replaceAll(' ', '').contains(q))
-            .take(30)
+            
             .toList();
     return Card(
       child: Padding(
@@ -209,68 +209,61 @@ class _PhonePanelState extends State<PhonePanel> {
           ),
           const SizedBox(height: 8),
           Expanded(
-            child: q.isNotEmpty
-                ? ListView(children: [
-                    for (final c in results)
-                      ListTile(
-                        dense: true,
-                        leading: const Icon(Icons.person),
-                        title: Text(c.name),
-                        subtitle: Text(c.number,
-                            textDirection: TextDirection.ltr),
-                        trailing: IconButton.filled(
-                          icon: const Icon(Icons.call),
-                          onPressed: () => _call(c),
-                        ),
-                      ),
-                  ])
-                : favs.isEmpty
-                    ? Center(
-                        child: Text(
-                          tr('مفيش مفضلين. علّم جهات الاتصال بنجمة في تطبيق الأسماء، أو دوّر فوق.'),
-                          textAlign: TextAlign.center,
-                        ),
-                      )
-                    : GridView.count(
-                        crossAxisCount: 4,
-                        mainAxisSpacing: 8,
-                        crossAxisSpacing: 8,
-                        childAspectRatio: 1.6,
-                        children: [
-                          for (final c in favs)
-                            Material(
-                              color: scheme.surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(12),
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(12),
-                                onTap: () => _call(c),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(6),
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      CircleAvatar(
-                                        radius: 16,
-                                        backgroundColor: scheme.primary,
-                                        child: Text(
-                                            c.name.characters.first,
-                                            style: TextStyle(
-                                                color: scheme.onPrimary)),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(c.name,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
+            child: _list(context, q.isNotEmpty ? results : all,
+                favs: q.isEmpty ? favs : const []),
           ),
         ]),
       ),
+    );
+  }
+
+  Widget _list(BuildContext context, List<Contact> items,
+      {required List<Contact> favs}) {
+    final scheme = Theme.of(context).colorScheme;
+    if (items.isEmpty) {
+      return Center(child: Text(tr('مفيش أسماء')));
+    }
+    final hasFavs = favs.isNotEmpty;
+    return ListView.builder(
+      itemCount: items.length + (hasFavs ? 2 : 1),
+      itemBuilder: (context, i) {
+        if (hasFavs && i == 0) {
+          // Favourites as big buttons on top.
+          return Wrap(spacing: 8, runSpacing: 8, children: [
+            for (final c in favs)
+              ActionChip(
+                avatar: Icon(Icons.star, color: scheme.primary, size: 18),
+                label: Text(c.name),
+                onPressed: () => _call(c),
+                padding: const EdgeInsets.all(10),
+              ),
+          ]);
+        }
+        final header = hasFavs ? 1 : 0;
+        if (i == header) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(4, 10, 4, 4),
+            child: Text(tr('كل الأسماء (${items.length})'),
+                style: TextStyle(
+                    color: scheme.primary, fontWeight: FontWeight.bold)),
+          );
+        }
+        final c = items[i - header - 1];
+        return ListTile(
+          dense: true,
+          leading: CircleAvatar(
+            radius: 16,
+            child: Text(c.name.characters.first),
+          ),
+          title: Text(c.name),
+          subtitle: Text(c.number, textDirection: TextDirection.ltr),
+          trailing: IconButton.filled(
+            icon: const Icon(Icons.call),
+            onPressed: () => _call(c),
+          ),
+          onTap: () => _call(c),
+        );
+      },
     );
   }
 }

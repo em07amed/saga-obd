@@ -484,4 +484,6 @@ const Map<String, String> _en = {
       'No favourites. Star contacts in your Contacts app, or search above.',
   'التحكم في الموسيقى': 'Music controls',
   'شغّل الموسيقى من أي تطبيق وتحكّم فيها من هنا': 'Play music in any app and control it here',
+  'مفيش أسماء': 'No contacts',
+  'كل الأسماء': 'All contacts',
 };
