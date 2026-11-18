@@ -95,6 +95,20 @@ class SettingsPage extends StatelessWidget {
               onSelectionChanged: (sel) => s.setSpeedAlertMode(sel.first),
             ),
           ),
+          SwitchListTile(
+            secondary: Icon(Icons.add_road),
+            title: Text(tr('استخدم حد الطريق تلقائياً')),
+            subtitle: Text(tr('من خرائط OpenStreetMap. لو الطريق مش متسجل حده، بيستخدم الحد اليدوي.')),
+            value: s.autoRoadLimit,
+            onChanged: s.setAutoRoadLimit,
+          ),
+          SwitchListTile(
+            secondary: Icon(Icons.camera_alt_outlined),
+            title: Text(tr('تنبيه الرادارات')),
+            subtitle: Text(tr('قبل الرادار بـ 600 متر، والبيانات ممكن تكون ناقصة')),
+            value: s.cameraAlerts,
+            onChanged: s.setCameraAlerts,
+          ),
           ListTile(
             leading: Icon(Icons.play_circle_outline),
             title: Text(tr('جرّب تنبيه السرعة')),

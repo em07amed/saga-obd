@@ -5,6 +5,7 @@ import 'maintenance/maintenance.dart';
 import 'obd/bt_channel.dart';
 import 'obd/obd_service.dart';
 import 'obd/pids.dart';
+import 'road/road_service.dart';
 import 'settings.dart';
 
 /// Watches live readings and raises a system notification (sound + vibration,
@@ -14,6 +15,7 @@ class AlertService {
   final AppSettings settings;
   final MaintenanceService maintenance;
   final BtChannel bt;
+  final RoadService road;
 
   /// Last time each alert fired, to avoid repeating every polling cycle.
   final Map<String, DateTime> _last = {};
@@ -43,7 +45,7 @@ class AlertService {
     }
   }
 
-  AlertService(this.obd, this.settings, this.maintenance, this.bt) {
+  AlertService(this.obd, this.settings, this.maintenance, this.bt, this.road) {
     obd.addListener(_check);
   }
 
@@ -140,7 +142,7 @@ class AlertService {
   void _checkSpeed(double? speed) {
     final mode = settings.speedAlertMode;
     if (speed == null || mode == 'off') return;
-    final limit = settings.speedLimit;
+    final limit = road.effectiveLimit; // road's own limit when OSM knows it
     final now = DateTime.now();
     if (speed > limit) {
       if (!_speeding) {

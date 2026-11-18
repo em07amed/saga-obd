@@ -151,6 +151,14 @@ class _DriveModePageState extends State<DriveModePage> {
                 Polyline(points: _path, color: scheme.primary, strokeWidth: 5),
               ]),
             MarkerLayer(markers: [
+              for (final c in App.road.cameras)
+                Marker(
+                  point: c.at,
+                  width: 30,
+                  height: 30,
+                  child: mapPin(const Color(0xFFD32F2F), Icons.camera_alt,
+                      size: 15),
+                ),
               if (nav.destination != null)
                 Marker(
                   point: nav.destination!.at,
@@ -337,6 +345,7 @@ class _DriveModePageState extends State<DriveModePage> {
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     WakelockPlus.enable(); // screen stays on only in drive mode
     _startGps();
+    App.road.start();
   }
 
   @override
@@ -359,7 +368,7 @@ class _DriveModePageState extends State<DriveModePage> {
     return Scaffold(
       body: SafeArea(
         child: ListenableBuilder(
-          listenable: Listenable.merge([obd, trips, App.maintenance, App.fuel, s, App.nav]),
+          listenable: Listenable.merge([obd, trips, App.maintenance, App.fuel, s, App.nav, App.road]),
           builder: (context, _) {
             final v = obd.values;
             final rpm = v[Pids.rpm];
@@ -459,7 +468,7 @@ class _DriveModePageState extends State<DriveModePage> {
                                   fmt(v[Pids.speed]),
                                   tr('كم/س'),
                                   size: 140,
-                                  color: (v[Pids.speed] ?? 0) > s.speedLimit &&
+                                  color: (v[Pids.speed] ?? 0) > App.road.effectiveLimit &&
                                           s.speedAlertMode != 'off'
                                       ? AppColors.danger(context)
                                       : null,
@@ -490,7 +499,7 @@ class _DriveModePageState extends State<DriveModePage> {
                                     child: Text(
                                       s.speedAlertMode == 'off'
                                           ? '—'
-                                          : '${s.speedLimit.round()}',
+                                          : '${App.road.effectiveLimit.round()}',
                                       style: const TextStyle(
                                           color: Colors.black,
                                           fontSize: 18,
@@ -506,6 +515,42 @@ class _DriveModePageState extends State<DriveModePage> {
                                   ),
                                 ],
                               ),
+                              // Where the limit comes from, and the next camera.
+                              Text(
+                                App.road.limitIsAuto
+                                    ? tr('حد الطريق تلقائي')
+                                    : tr('الحد يدوي'),
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant),
+                              ),
+                              if (App.road.nextCameraM != null &&
+                                  App.road.nextCameraM! <= 1000)
+                                Container(
+                                  margin: const EdgeInsets.only(top: 4),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFD32F2F),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.camera_alt,
+                                          color: Colors.white, size: 16),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        tr('رادار ${(App.road.nextCameraM! / 10).round() * 10} متر'),
+                                        style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               const SizedBox(height: 8),
                             ]),
                           ),

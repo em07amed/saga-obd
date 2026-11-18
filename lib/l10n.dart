@@ -486,4 +486,17 @@ const Map<String, String> _en = {
   'شغّل الموسيقى من أي تطبيق وتحكّم فيها من هنا': 'Play music in any app and control it here',
   'مفيش أسماء': 'No contacts',
   'كل الأسماء': 'All contacts',
+  // ---- road limits / cameras ----
+  'حد الطريق تلقائي': 'Road limit (auto)',
+  'الحد يدوي': 'Manual limit',
+  'رادار': 'Camera',
+  'رادار بعد': 'Speed camera in',
+  'الحد': 'Limit',
+  'هدّي. الرادار قدامك والحد': 'Slow down. Camera ahead, limit',
+  'استخدم حد الطريق تلقائياً': 'Use road speed limit automatically',
+  'من خرائط OpenStreetMap. لو الطريق مش متسجل حده، بيستخدم الحد اليدوي.':
+      'From OpenStreetMap. If the road has no limit recorded, the manual limit is used.',
+  'تنبيه الرادارات': 'Speed camera alerts',
+  'قبل الرادار بـ 600 متر، والبيانات ممكن تكون ناقصة':
+      '600 m before a camera; data may be incomplete',
 };

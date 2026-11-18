@@ -10,6 +10,7 @@ import 'alerts.dart';
 import 'fuel/fuel_log.dart';
 import 'maintenance/maintenance.dart';
 import 'nav/nav_service.dart';
+import 'road/road_service.dart';
 import 'obd/bt_channel.dart';
 import 'obd/obd_service.dart';
 import 'settings.dart';
@@ -33,6 +34,7 @@ class App {
   static late final FuelLogService fuel;
   static late final AlertService alerts;
   static late final NavService nav;
+  static late final RoadService road;
 }
 
 Future<void> main() async {
@@ -51,8 +53,9 @@ Future<void> main() async {
   App.fuel = FuelLogService(App.db, App.settings, App.obd, App.trips);
   await App.fuel.load();
   App.nav = NavService(App.obd.bt);
-  App.alerts =
-      AlertService(App.obd, App.settings, App.maintenance, App.obd.bt);
+  App.road = RoadService(App.obd.bt, App.settings, App.obd);
+  App.alerts = AlertService(
+      App.obd, App.settings, App.maintenance, App.obd.bt, App.road);
   runApp(CarObdApp());
 }
 
@@ -139,10 +142,12 @@ class _HomeShellState extends State<HomeShell> {
     if (want == _keepAlive) return;
     _keepAlive = want;
     if (want) {
+      App.road.start();
       App.obd.bt
           .startKeepAlive('Car OBD', tr('بيسجّل الرحلة والقراءات'))
           .catchError((_) {});
     } else {
+      App.road.stop();
       App.obd.bt.stopKeepAlive().catchError((_) {});
     }
   }

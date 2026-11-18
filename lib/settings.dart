@@ -23,6 +23,8 @@ class AppSettings extends ChangeNotifier {
   /// 'voice' (spoken message), 'beep' (tone, no message) or 'off'.
   double speedLimit = 100;
   String speedAlertMode = 'voice';
+  bool autoRoadLimit = true; // use the road's limit from OSM when known
+  bool cameraAlerts = true;
   double coolantAlert = 80; // °C; 105 is the normal value, 80 for testing
 
   /// Official Egypt pump prices (EGP/L) as of Nov 2026. Editable per vehicle
@@ -60,6 +62,8 @@ class AppSettings extends ChangeNotifier {
     voiceAlerts = _p.getBool('voiceAlerts') ?? true;
     speedLimit = _p.getDouble('speedLimit') ?? speedLimit;
     speedAlertMode = _p.getString('speedAlertMode') ?? speedAlertMode;
+    autoRoadLimit = _p.getBool('autoRoadLimit') ?? true;
+    cameraAlerts = _p.getBool('cameraAlerts') ?? true;
     coolantAlert = _p.getDouble('coolantAlert') ?? coolantAlert;
     Lang.code = lang;
 
@@ -143,6 +147,18 @@ class AppSettings extends ChangeNotifier {
   Future<void> setSpeedLimit(double v) async {
     speedLimit = v.clamp(20, 200).toDouble();
     await _p.setDouble('speedLimit', speedLimit);
+    notifyListeners();
+  }
+
+  Future<void> setAutoRoadLimit(bool v) async {
+    autoRoadLimit = v;
+    await _p.setBool('autoRoadLimit', v);
+    notifyListeners();
+  }
+
+  Future<void> setCameraAlerts(bool v) async {
+    cameraAlerts = v;
+    await _p.setBool('cameraAlerts', v);
     notifyListeners();
   }
 
