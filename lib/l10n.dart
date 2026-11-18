@@ -443,4 +443,10 @@ const Map<String, String> _en = {
   'تتبّع موقعي': 'Follow my location',
   'العدادات': 'Gauges',
   'الخريطة': 'Map',
+  'الحرارة': 'Temperature',
+  'خرائط': 'Maps',
+  'موسيقى': 'Music',
+  'مكالمة': 'Call',
+  'المساعد': 'Assistant',
+  'مفيش تطبيق مناسب على الموبايل': 'No suitable app on this phone',
 };

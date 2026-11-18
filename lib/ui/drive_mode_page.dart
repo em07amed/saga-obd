@@ -389,6 +389,9 @@ class _DriveModePageState extends State<DriveModePage> {
                       ],
                     ),
                   ),
+                  // Car-home dock, like a head unit: other apps + media.
+                  const SizedBox(height: 8),
+                  _Dock(),
                 ],
               ),
             );
@@ -396,5 +399,73 @@ class _DriveModePageState extends State<DriveModePage> {
         ),
       ),
     );
+  }
+}
+
+class _Dock extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final bt = App.obd.bt;
+    final scheme = Theme.of(context).colorScheme;
+
+    Widget btn(IconData icon, String label, VoidCallback onTap,
+            {bool accent = false}) =>
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Material(
+              color: accent ? scheme.primary : scheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(14),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  onTap();
+                },
+                child: SizedBox(
+                  height: 56,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(icon,
+                          size: 28,
+                          color: accent ? scheme.onPrimary : scheme.onSurface),
+                      if (label.isNotEmpty) ...[
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(label,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: accent
+                                      ? scheme.onPrimary
+                                      : scheme.onSurface)),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+
+    Future<void> open(String kind) async {
+      final ok = await bt.launch(kind).catchError((_) => false);
+      if (!ok && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(tr('مفيش تطبيق مناسب على الموبايل'))));
+      }
+    }
+
+    return Row(children: [
+      btn(Icons.navigation, tr('خرائط'), () => open('maps')),
+      btn(Icons.skip_previous, '', () => bt.mediaKey('prev')),
+      btn(Icons.play_arrow, '', () => bt.mediaKey('play_pause'), accent: true),
+      btn(Icons.skip_next, '', () => bt.mediaKey('next')),
+      btn(Icons.library_music, tr('موسيقى'), () => open('music')),
+      btn(Icons.call, tr('مكالمة'), () => open('dialer')),
+      btn(Icons.mic, tr('المساعد'), () => open('assistant')),
+    ]);
   }
 }

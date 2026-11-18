@@ -6,6 +6,7 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothSocket
 import android.content.Context
+import android.content.Intent
 import android.os.Handler
 import android.os.Looper
 import io.flutter.embedding.android.FlutterActivity
@@ -91,12 +92,23 @@ class MainActivity : FlutterActivity() {
                     )
                     result.success(null)
                 }
+                "mediaKey" -> {
+                    mediaKey(call.argument<String>("key") ?: "play_pause")
+                    result.success(null)
+                }
+                "launch" -> {
+                    result.success(launch(call.argument<String>("kind") ?: ""))
+                }
                 "beep" -> {
                     beep()
                     result.success(null)
                 }
                 "speak" -> {
-                    speak(call.argument<String>("text") ?: "", call.argument<String>("lang") ?: "ar")
+                    speak(
+                        call.argument<String>("text") ?: "",
+                        call.argument<String>("lang") ?: "ar",
+                        call.argument<Boolean>("flush") ?: false
+                    )
                     result.success(null)
                 }
                 "stopKeepAlive" -> {
@@ -209,8 +221,10 @@ class MainActivity : FlutterActivity() {
     private var tts: android.speech.tts.TextToSpeech? = null
     private var ttsReady = false
     private val pendingSpeech = mutableListOf<Pair<String, String>>()
+    private var flushNext = false
 
-    private fun speak(text: String, lang: String) {
+    private fun speak(text: String, lang: String, flush: Boolean = false) {
+        flushNext = flush
         if (text.isBlank()) return
         val engine = tts
         if (engine == null) {
@@ -233,6 +247,35 @@ class MainActivity : FlutterActivity() {
         if (ttsReady) say(text, lang) else pendingSpeech.add(text to lang)
     }
 
+    /** Play/pause/next/previous for whatever music app is playing. */
+    private fun mediaKey(key: String) {
+        val code = when (key) {
+            "next" -> android.view.KeyEvent.KEYCODE_MEDIA_NEXT
+            "prev" -> android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS
+            else -> android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+        }
+        val am = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+        am.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, code))
+        am.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, code))
+    }
+
+    /** Opens maps, the dialer, the music app or the voice assistant. */
+    private fun launch(kind: String): Boolean {
+        val intent = when (kind) {
+            "maps" -> Intent(Intent.ACTION_VIEW, android.net.Uri.parse("geo:0,0?q="))
+            "dialer" -> Intent(Intent.ACTION_DIAL)
+            "music" -> Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_MUSIC)
+            "assistant" -> Intent(Intent.ACTION_VOICE_COMMAND)
+            else -> return false
+        }.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return try {
+            startActivity(intent)
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     /** Two short warning beeps, no words. */
     private fun beep() {
         try {
@@ -248,7 +291,9 @@ class MainActivity : FlutterActivity() {
         val wanted = java.util.Locale(lang)
         val ok = engine.isLanguageAvailable(wanted) >= android.speech.tts.TextToSpeech.LANG_AVAILABLE
         engine.language = if (ok) wanted else java.util.Locale.ENGLISH
-        engine.speak(text, android.speech.tts.TextToSpeech.QUEUE_ADD, null, "alert${System.nanoTime()}")
+        val mode = if (flushNext) android.speech.tts.TextToSpeech.QUEUE_FLUSH
+                   else android.speech.tts.TextToSpeech.QUEUE_ADD
+        engine.speak(text, mode, null, "alert${System.nanoTime()}")
     }
 
     private fun alert(title: String, text: String, sound: Boolean) {

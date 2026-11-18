@@ -41,12 +41,22 @@ class BtChannel {
 
   Future<void> stopKeepAlive() => _method.invokeMethod('stopKeepAlive');
 
+  /// Media control for the phone's current player: play_pause | next | prev.
+  Future<void> mediaKey(String key) =>
+      _method.invokeMethod('mediaKey', {'key': key});
+
+  /// Opens another app: maps | dialer | music | assistant.
+  Future<bool> launch(String kind) async =>
+      (await _method.invokeMethod<bool>('launch', {'kind': kind})) ?? false;
+
   /// Short warning tone without any spoken message.
   Future<void> beep() => _method.invokeMethod('beep');
 
   /// Speaks [text] with the phone's text-to-speech engine.
-  Future<void> speak(String text, String lang) =>
-      _method.invokeMethod('speak', {'text': text, 'lang': lang});
+  /// [flush] interrupts anything still being spoken (for fast repeats).
+  Future<void> speak(String text, String lang, {bool flush = false}) =>
+      _method.invokeMethod(
+          'speak', {'text': text, 'lang': lang, 'flush': flush});
 
   /// High-priority notification (heads-up, sound, vibration).
   Future<void> notify(String title, String text, {bool sound = true}) =>

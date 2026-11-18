@@ -25,6 +25,23 @@ class AlertService {
   DateTime? _engineOnSince;
   bool _speeding = false;
   DateTime? _lastSpeedWarn;
+  DateTime? _lastHotWarn;
+
+  /// While a condition lasts, repeat a short warning this often.
+  static const _repeat = Duration(seconds: 3);
+
+  bool _dueAgain(DateTime? last) =>
+      last == null || DateTime.now().difference(last) >= _repeat;
+
+  /// Short repeat: a few spoken words, or a beep if voice is off.
+  void _nag(String words, {required bool voice}) {
+    HapticFeedback.heavyImpact();
+    if (voice) {
+      bt.speak(words, Lang.code, flush: true).catchError((_) {});
+    } else {
+      bt.beep().catchError((_) {});
+    }
+  }
 
   AlertService(this.obd, this.settings, this.maintenance, this.bt) {
     obd.addListener(_check);
@@ -54,12 +71,23 @@ class AlertService {
     if (coolant != null) {
       if (!_hot && coolant >= limit) {
         _hot = true;
+        _lastHotWarn = DateTime.now();
         _fire('hot', tr('حرارة الموتور عالية'),
             tr('حرارة المياه ${coolant.toStringAsFixed(0)}°C. اركن وطفي التكييف.'),
             speech: tr('تحذير. حرارة الموتور وصلت ${coolant.toStringAsFixed(0)} درجة. '
-                'اركن على جنب وطفي التكييف.'));
-      } else if (_hot && coolant < limit - 5) {
-        _hot = false;
+                'اركن على جنب وطفي التكييف.'),
+            force: true);
+      } else if (_hot && coolant < limit) {
+        _hot = false; // back to normal: stop repeating
+      } else if (_hot && _dueAgain(_lastHotWarn)) {
+        // Still hot: keep warning every few seconds until it cools down.
+        // The first message is long, so give it time to finish.
+        if (DateTime.now().difference(_lastHotWarn!) >=
+            const Duration(seconds: 6)) {
+          _lastHotWarn = DateTime.now();
+          _nag(tr('الحرارة ${coolant.toStringAsFixed(0)}'),
+              voice: settings.voiceAlerts);
+        }
       }
     }
 
@@ -115,24 +143,28 @@ class AlertService {
     final limit = settings.speedLimit;
     final now = DateTime.now();
     if (speed > limit) {
-      final due = !_speeding ||
-          _lastSpeedWarn == null ||
-          now.difference(_lastSpeedWarn!) > const Duration(seconds: 20);
-      _speeding = true;
-      if (!due) return;
-      _lastSpeedWarn = now;
-      HapticFeedback.heavyImpact();
-      if (mode == 'beep') {
-        bt.beep().catchError((_) {});
-      } else {
-        bt
-            .speak(
-                tr('انتبه. سرعتك ${speed.round()}، والحد ${limit.round()}.'),
-                Lang.code)
-            .catchError((_) {});
+      if (!_speeding) {
+        // First warning: full sentence.
+        _speeding = true;
+        _lastSpeedWarn = now.add(const Duration(seconds: 2)); // let it finish
+        HapticFeedback.heavyImpact();
+        if (mode == 'beep') {
+          bt.beep().catchError((_) {});
+        } else {
+          bt
+              .speak(
+                  tr('انتبه. سرعتك ${speed.round()}، والحد ${limit.round()}.'),
+                  Lang.code,
+                  flush: true)
+              .catchError((_) {});
+        }
+      } else if (_dueAgain(_lastSpeedWarn)) {
+        // Still over: repeat every 3 s until back under the limit.
+        _lastSpeedWarn = now;
+        _nag('${speed.round()}', voice: mode == 'voice');
       }
-    } else if (speed < limit - 3) {
-      _speeding = false;
+    } else {
+      _speeding = false; // back to normal: stop repeating
     }
   }
 
