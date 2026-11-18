@@ -167,6 +167,9 @@ class BtChannel {
       await _method.invokeMethod<bool>('callSpeaker', {'on': on}) ?? on;
   Future<bool> setMute(bool on) async =>
       await _method.invokeMethod<bool>('callMute', {'on': on}) ?? on;
+  /// Ask Android to let us see the caller's number (caller-ID role).
+  Future<bool> requestCallerId() async =>
+      await _method.invokeMethod<bool>('callerIdRole') ?? false;
   Future<void> refreshCall() async {
     final m = await _method.invokeMethod<Map>('callCurrent');
     if (m != null) phoneCall.value = CallInfo.fromMap(Map<String, dynamic>.from(m));

@@ -61,14 +61,14 @@ jobs:
 
       - name: Build APK
         working-directory: obd_saga
-        run: flutter build apk --release
+        run: flutter build apk --release --build-number=${{ github.run_number }}
 
       # Play Store needs an Android App Bundle, signed with the same
       # (upload) key; Google re-signs it for delivery.
       - name: Build App Bundle for Google Play
         working-directory: obd_saga
         run: |
-          flutter build appbundle --release
+          flutter build appbundle --release --build-number=${{ github.run_number }}
           grep -o 'targetSdk[^,]*' build/app/intermediates/merged_manifest/release/processReleaseMainManifest/AndroidManifest.xml || true
 
       - uses: actions/upload-artifact@v4

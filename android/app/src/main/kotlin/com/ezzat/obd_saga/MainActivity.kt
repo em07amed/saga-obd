@@ -60,6 +60,16 @@ class MainActivity : FlutterActivity() {
 
         channel = MethodChannel(messenger, "obd/bt")
         registerCallReceiver()
+        // Caller number can arrive after the ringing broadcast.
+        CallerIdService.listener = { n ->
+            main.post {
+                if (!n.isNullOrBlank() && callState == "ringing" && callNumber == null) {
+                    callNumber = n
+                    callName = lookupName(n)
+                    channel?.invokeMethod("callState", callInfo())
+                }
+            }
+        }
         channel!!.setMethodCallHandler { call, result ->
             when (call.method) {
                 "isEnabled" -> result.success(adapter()?.isEnabled == true)
@@ -141,6 +151,7 @@ class MainActivity : FlutterActivity() {
                     result.success(audio().isMicrophoneMute)
                 }
                 "callCurrent" -> result.success(callInfo())
+                "callerIdRole" -> result.success(requestCallerIdRole())
                 "mediaKey" -> {
                     mediaKey(call.argument<String>("key") ?: "play_pause")
                     result.success(null)
@@ -577,7 +588,8 @@ class MainActivity : FlutterActivity() {
                 when (st) {
                     android.telephony.TelephonyManager.EXTRA_STATE_RINGING -> {
                         callState = "ringing"; callIncoming = true
-                        if (!num.isNullOrBlank()) callNumber = num
+                        val n = if (!num.isNullOrBlank()) num else CallerIdService.lastNumber
+                        if (!n.isNullOrBlank()) callNumber = n
                     }
                     android.telephony.TelephonyManager.EXTRA_STATE_OFFHOOK -> {
                         if (prev == "idle") {
@@ -588,6 +600,7 @@ class MainActivity : FlutterActivity() {
                         callState = "offhook"
                     }
                     else -> {
+                        CallerIdService.lastNumber = null
                         callState = "idle"; callNumber = null; callName = null
                         callIncoming = false; callSince = 0L; lastDialed = null
                         try { audio().isMicrophoneMute = false } catch (_: Exception) {}
@@ -636,6 +649,20 @@ class MainActivity : FlutterActivity() {
             a.isSpeakerphoneOn = on
         } catch (_: Exception) {}
         return try { a.isSpeakerphoneOn } catch (_: Exception) { on }
+    }
+
+    /** Asks once for the "caller ID & spam" role so we can show who's calling. */
+    private fun requestCallerIdRole(): Boolean {
+        if (android.os.Build.VERSION.SDK_INT < 29) return false
+        val rm = getSystemService(android.app.role.RoleManager::class.java) ?: return false
+        val role = android.app.role.RoleManager.ROLE_CALL_SCREENING
+        if (!rm.isRoleAvailable(role)) return false
+        if (rm.isRoleHeld(role)) return true
+        return try {
+            @Suppress("DEPRECATION")
+            startActivityForResult(rm.createRequestRoleIntent(role), 7701)
+            false
+        } catch (_: Exception) { false }
     }
 
     private fun bringToFront() {

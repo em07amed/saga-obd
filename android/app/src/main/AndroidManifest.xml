@@ -23,7 +23,6 @@
     <uses-permission android:name="android.permission.CALL_PHONE" />
     <!-- Show / answer / end calls from the drive screen -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
-    <uses-permission android:name="android.permission.READ_CALL_LOG" />
     <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
@@ -60,6 +59,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Caller ID only (user grants the "call screening" role); never blocks calls -->
+        <service
+            android:name=".CallerIdService"
+            android:exported="true"
+            android:permission="android.permission.BIND_SCREENING_SERVICE">
+            <intent-filter>
+                <action android:name="android.telecom.CallScreeningService" />
+            </intent-filter>
+        </service>
         <service
             android:name=".ObdKeepAliveService"
             android:exported="false"

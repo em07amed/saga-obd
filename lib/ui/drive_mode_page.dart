@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart' show LatLng;
@@ -553,7 +554,13 @@ class _DriveModePageState extends State<DriveModePage> {
   void initState() {
     super.initState();
     // Needed to show who's calling and to answer / hang up from here.
-    Permission.phone.request();
+    Permission.phone.request().then((_) async {
+      final p = await SharedPreferences.getInstance();
+      if (p.getBool('askedCallerId') != true) {
+        await p.setBool('askedCallerId', true);
+        await App.obd.bt.requestCallerId().catchError((_) => false);
+      }
+    });
     SystemChrome.setPreferredOrientations(
         [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
