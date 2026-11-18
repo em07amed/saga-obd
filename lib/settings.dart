@@ -18,6 +18,7 @@ class AppSettings extends ChangeNotifier {
   String lang = 'ar'; // ar | en
   bool alertsOn = true;
   bool voiceAlerts = true;
+  String driveStyle = 'neon'; // neon | classic (drive-mode look)
 
   /// Speed limit chosen by the driver (km/h) and how to warn when exceeded:
   /// 'voice' (spoken message), 'beep' (tone, no message) or 'off'.
@@ -60,6 +61,7 @@ class AppSettings extends ChangeNotifier {
     lang = _p.getString('lang') ?? lang;
     alertsOn = _p.getBool('alertsOn') ?? true;
     voiceAlerts = _p.getBool('voiceAlerts') ?? true;
+    driveStyle = _p.getString('driveStyle') ?? driveStyle;
     speedLimit = _p.getDouble('speedLimit') ?? speedLimit;
     speedAlertMode = _p.getString('speedAlertMode') ?? speedAlertMode;
     autoRoadLimit = _p.getBool('autoRoadLimit') ?? true;
@@ -196,6 +198,12 @@ class AppSettings extends ChangeNotifier {
     } else {
       await _p.setString('vehicleImage_$id', path);
     }
+    notifyListeners();
+  }
+
+  Future<void> setDriveStyle(String v) async {
+    driveStyle = v;
+    await _p.setString('driveStyle', v);
     notifyListeners();
   }
 

@@ -14,6 +14,7 @@ import '../obd/bt_channel.dart';
 import '../obd/pids.dart';
 import '../nav/nav_service.dart';
 import 'drive_panels.dart';
+import 'neon_dash.dart';
 import 'map_tiles.dart';
 import 'vehicle_avatar.dart';
 import 'sport_theme.dart';
@@ -657,6 +658,7 @@ class _DriveModePageState extends State<DriveModePage> {
     final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
+      backgroundColor: App.settings.driveStyle == 'neon' ? neonBg : null,
       body: SafeArea(
         child: ListenableBuilder(
           listenable: Listenable.merge([obd, trips, App.maintenance, App.fuel, s, App.nav, App.road]),
@@ -670,6 +672,8 @@ class _DriveModePageState extends State<DriveModePage> {
             final range = litres == null ? null : litres / avg * 100;
             final hot = coolant != null && coolant >= 105;
             final redline = rpm != null && rpm >= 6000;
+            final neon = s.driveStyle == 'neon';
+            final neonFull = neon && _panel == _Panel.gauges;
 
             Widget big(String label, String value, String unit,
                     {Color? color, double size = 64}) =>
@@ -722,10 +726,19 @@ class _DriveModePageState extends State<DriveModePage> {
                       if (App.maintenance.odometerKm != null)
                         Text(tr('العداد ${fmt(App.maintenance.odometerKm)} كم'),
                             style: TextStyle(color: scheme.onSurfaceVariant)),
+                      IconButton(
+                        tooltip: tr('شكل العدادات'),
+                        onPressed: () => s.setDriveStyle(
+                            neon ? 'classic' : 'neon'),
+                        icon: Icon(neon
+                            ? Icons.grid_view_rounded
+                            : Icons.speed_rounded,
+                            color: neon ? neonCyan : null),
+                      ),
                     ],
                   ),
                   // Shift light: 12 blocks, green → amber → red up to 6000 rpm.
-                  Padding(
+                  if (!neonFull) Padding(
                     padding: const EdgeInsets.symmetric(vertical: 6),
                     child: Row(
                       children: [
@@ -749,6 +762,12 @@ class _DriveModePageState extends State<DriveModePage> {
                       ],
                     ),
                   ),
+                  if (neonFull)
+                    const Expanded(child: Padding(
+                      padding: EdgeInsets.only(top: 6),
+                      child: NeonDash(),
+                    ))
+                  else
                   Expanded(
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
