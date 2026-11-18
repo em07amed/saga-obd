@@ -59,6 +59,7 @@ class MainActivity : FlutterActivity() {
         })
 
         channel = MethodChannel(messenger, "obd/bt")
+        registerCallReceiver()
         channel!!.setMethodCallHandler { call, result ->
             when (call.method) {
                 "isEnabled" -> result.success(adapter()?.isEnabled == true)
@@ -119,16 +120,27 @@ class MainActivity : FlutterActivity() {
                 }
                 "call" -> {
                     val number = call.argument<String>("number") ?: ""
+                    lastDialed = number
                     try {
                         startActivity(
                             Intent(Intent.ACTION_CALL, android.net.Uri.parse("tel:" + android.net.Uri.encode(number)))
                                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         )
                         result.success(true)
+                        // The phone app takes over the screen; come back to ours.
+                        main.postDelayed({ bringToFront() }, 1500)
                     } catch (e: Exception) {
                         result.error("CALL", e.message, null)
                     }
                 }
+                "callAnswer" -> result.success(answerCall())
+                "callEnd" -> result.success(endCall())
+                "callSpeaker" -> result.success(setSpeaker(call.argument<Boolean>("on") == true))
+                "callMute" -> {
+                    try { audio().isMicrophoneMute = call.argument<Boolean>("on") == true } catch (_: Exception) {}
+                    result.success(audio().isMicrophoneMute)
+                }
+                "callCurrent" -> result.success(callInfo())
                 "mediaKey" -> {
                     mediaKey(call.argument<String>("key") ?: "play_pause")
                     result.success(null)
@@ -523,7 +535,120 @@ class MainActivity : FlutterActivity() {
         out = null
     }
 
+    // ---- phone calls (incoming + outgoing) ----
+    private var lastDialed: String? = null
+    private var callState = "idle"
+    private var callNumber: String? = null
+    private var callName: String? = null
+    private var callIncoming = false
+    private var callSince = 0L
+    private var callReceiver: android.content.BroadcastReceiver? = null
+
+    private fun audio() = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+    private fun telecom() = getSystemService(Context.TELECOM_SERVICE) as android.telecom.TelecomManager
+
+    private fun callInfo(): Map<String, Any?> = mapOf(
+        "state" to callState, "number" to callNumber, "name" to callName,
+        "incoming" to callIncoming, "since" to callSince,
+        "speaker" to (try { audio().isSpeakerphoneOn } catch (_: Exception) { false }),
+        "muted" to (try { audio().isMicrophoneMute } catch (_: Exception) { false }),
+    )
+
+    private fun lookupName(number: String?): String? {
+        if (number.isNullOrBlank()) return null
+        return try {
+            val uri = android.net.Uri.withAppendedPath(
+                android.provider.ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
+                android.net.Uri.encode(number))
+            contentResolver.query(uri,
+                arrayOf(android.provider.ContactsContract.PhoneLookup.DISPLAY_NAME),
+                null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+        } catch (_: Exception) { null }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun registerCallReceiver() {
+        if (callReceiver != null) return
+        callReceiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(ctx: Context, i: Intent) {
+                val st = i.getStringExtra(android.telephony.TelephonyManager.EXTRA_STATE) ?: return
+                val num = i.getStringExtra(android.telephony.TelephonyManager.EXTRA_INCOMING_NUMBER)
+                val prev = callState
+                when (st) {
+                    android.telephony.TelephonyManager.EXTRA_STATE_RINGING -> {
+                        callState = "ringing"; callIncoming = true
+                        if (!num.isNullOrBlank()) callNumber = num
+                    }
+                    android.telephony.TelephonyManager.EXTRA_STATE_OFFHOOK -> {
+                        if (prev == "idle") {
+                            callIncoming = false
+                            callNumber = lastDialed
+                        }
+                        if (prev != "offhook") callSince = System.currentTimeMillis()
+                        callState = "offhook"
+                    }
+                    else -> {
+                        callState = "idle"; callNumber = null; callName = null
+                        callIncoming = false; callSince = 0L; lastDialed = null
+                        try { audio().isMicrophoneMute = false } catch (_: Exception) {}
+                    }
+                }
+                if (callNumber != null && callName == null) callName = lookupName(callNumber)
+                // The same state can arrive twice (with and without number).
+                main.post { channel?.invokeMethod("callState", callInfo()) }
+            }
+        }
+        val f = android.content.IntentFilter(android.telephony.TelephonyManager.ACTION_PHONE_STATE_CHANGED)
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(callReceiver, f, Context.RECEIVER_EXPORTED)
+        } else {
+            registerReceiver(callReceiver, f)
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    @Suppress("DEPRECATION")
+    private fun answerCall(): Boolean = try {
+        telecom().acceptRingingCall()
+        main.postDelayed({ bringToFront() }, 1200)
+        true
+    } catch (_: Exception) { false }
+
+    @SuppressLint("MissingPermission")
+    @Suppress("DEPRECATION")
+    private fun endCall(): Boolean = try {
+        if (android.os.Build.VERSION.SDK_INT >= 28) telecom().endCall() else false
+    } catch (_: Exception) { false }
+
+    @Suppress("DEPRECATION")
+    private fun setSpeaker(on: Boolean): Boolean {
+        val a = audio()
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 31) {
+                if (on) {
+                    a.availableCommunicationDevices
+                        .firstOrNull { it.type == android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+                        ?.let { a.setCommunicationDevice(it) }
+                } else {
+                    a.clearCommunicationDevice()
+                }
+            }
+            a.isSpeakerphoneOn = on
+        } catch (_: Exception) {}
+        return try { a.isSpeakerphoneOn } catch (_: Exception) { on }
+    }
+
+    private fun bringToFront() {
+        try {
+            startActivity(Intent(this, MainActivity::class.java).addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP))
+        } catch (_: Exception) {}
+    }
+
     override fun onDestroy() {
+        try { callReceiver?.let { unregisterReceiver(it) } } catch (_: Exception) {}
+        callReceiver = null
         tts?.shutdown()
         tts = null
         ObdKeepAliveService.stop(this)

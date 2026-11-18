@@ -14,6 +14,41 @@ class NowPlaying {
       this.access, this.title, this.artist, this.app, this.playing, this.art);
 }
 
+class CallInfo {
+  final String state; // idle | ringing | offhook
+  final String? number;
+  final String? name;
+  final bool incoming;
+  final DateTime? since;
+  final bool speaker;
+  final bool muted;
+  const CallInfo(this.state, this.number, this.name, this.incoming, this.since,
+      this.speaker, this.muted);
+  const CallInfo.idle()
+      : state = 'idle',
+        number = null,
+        name = null,
+        incoming = false,
+        since = null,
+        speaker = false,
+        muted = false;
+  factory CallInfo.fromMap(Map<String, dynamic> m) {
+    final s = (m['since'] as num?)?.toInt() ?? 0;
+    return CallInfo(
+      m['state'] as String? ?? 'idle',
+      m['number'] as String?,
+      m['name'] as String?,
+      m['incoming'] == true,
+      s > 0 ? DateTime.fromMillisecondsSinceEpoch(s) : null,
+      m['speaker'] == true,
+      m['muted'] == true,
+    );
+  }
+  bool get idle => state == 'idle';
+  bool get ringing => state == 'ringing';
+  String get who => name ?? number ?? '';
+}
+
 class Contact {
   final String name;
   final String number;
@@ -36,9 +71,16 @@ class BtChannel {
   /// True while the app is shown as a floating Picture-in-Picture window.
   static final pip = ValueNotifier<bool>(false);
 
+  /// Current phone call (idle when there is none).
+  static final phoneCall = ValueNotifier<CallInfo>(const CallInfo.idle());
+
   BtChannel() {
     _method.setMethodCallHandler((call) async {
       if (call.method == 'pip') pip.value = call.arguments == true;
+      if (call.method == 'callState') {
+        phoneCall.value =
+            CallInfo.fromMap(Map<String, dynamic>.from(call.arguments as Map));
+      }
     });
   }
 
@@ -116,6 +158,19 @@ class BtChannel {
 
   Future<void> call(String number) =>
       _method.invokeMethod('call', {'number': number});
+
+  Future<bool> answerCall() async =>
+      await _method.invokeMethod<bool>('callAnswer') ?? false;
+  Future<bool> endCall() async =>
+      await _method.invokeMethod<bool>('callEnd') ?? false;
+  Future<bool> setSpeaker(bool on) async =>
+      await _method.invokeMethod<bool>('callSpeaker', {'on': on}) ?? on;
+  Future<bool> setMute(bool on) async =>
+      await _method.invokeMethod<bool>('callMute', {'on': on}) ?? on;
+  Future<void> refreshCall() async {
+    final m = await _method.invokeMethod<Map>('callCurrent');
+    if (m != null) phoneCall.value = CallInfo.fromMap(Map<String, dynamic>.from(m));
+  }
 
   /// Media control for the phone's current player: play_pause | next | prev.
   Future<void> mediaKey(String key) =>

@@ -17,6 +17,7 @@ import 'obd/obd_service.dart';
 import 'settings.dart';
 import 'trips/trip_db.dart';
 import 'trips/trip_recorder.dart';
+import 'ui/call_overlay.dart';
 import 'ui/dashboard_page.dart';
 import 'ui/maintenance_page.dart';
 import 'ui/readings_page.dart';
@@ -87,6 +88,8 @@ class CarObdApp extends StatelessWidget {
           : _theme(Brightness.dark),
       // Remount on language change so every tr() string is rebuilt.
       home: HomeShell(key: ValueKey(App.settings.lang)),
+      // Incoming-call card and in-call bar over every screen.
+      builder: (context, child) => CallOverlay(child: child!),
       ),
     );
   }

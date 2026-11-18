@@ -546,4 +546,13 @@ const Map<String, String> _en = {
   'العداد مش متسجل': 'Odometer not set',
   'مش فاهم. جرّب: وديني على مكان، اتصل بحد، شغّل الراديو، أو السرعة كام':
       'Sorry. Try: take me to a place, call someone, play radio, or what is my speed',
+  // ---- calls ----
+  'مكالمة واردة': 'Incoming call',
+  'مكالمة من': 'Call from',
+  'رقم غير معروف': 'Unknown number',
+  'رفض': 'Decline',
+  'رد': 'Answer',
+  'كتم': 'Mute',
+  'سبيكر': 'Speaker',
+  'مش قادر أتحكم في المكالمة. اسمح بإذن الهاتف': "Can't control the call. Allow the phone permission",
 };

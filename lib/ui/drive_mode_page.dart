@@ -157,6 +157,16 @@ class _DriveModePageState extends State<DriveModePage> {
       }
       return;
     }
+    // Answer / hang up the current call.
+    final pc = BtChannel.phoneCall.value;
+    if (pc.ringing && has(['رد', 'افتح', 'answer'])) {
+      await App.obd.bt.answerCall();
+      return;
+    }
+    if (!pc.idle && !has(['راديو']) && has(['اقفل', 'ارفض', 'انهي', 'end call', 'hang up', 'decline'])) {
+      await App.obd.bt.endCall();
+      return;
+    }
     // Call someone.
     const callWords = ['اتصل ب', 'اتصل على', 'كلم', 'call '];
     if (has(callWords)) {
@@ -541,6 +551,8 @@ class _DriveModePageState extends State<DriveModePage> {
   @override
   void initState() {
     super.initState();
+    // Needed to show who's calling and to answer / hang up from here.
+    Permission.phone.request();
     SystemChrome.setPreferredOrientations(
         [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
