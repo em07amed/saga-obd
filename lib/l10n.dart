@@ -555,9 +555,5 @@ const Map<String, String> _en = {
   'كتم': 'Mute',
   'سبيكر': 'Speaker',
   'مش قادر أتحكم في المكالمة. اسمح بإذن الهاتف': "Can't control the call. Allow the phone permission",
-  // ---- neon dashboard ----
-  'متوسط السرعة': 'Avg speed',
-  'أقصى سرعة': 'Max speed',
-  'ل/س': 'L/h',
-  'شكل العدادات': 'Gauge style',
+  'اسمح بإذن الميكروفون': 'Allow the microphone permission',
 };

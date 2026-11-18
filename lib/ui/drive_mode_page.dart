@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:speech_to_text/speech_to_text.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart' show LatLng;
 import 'package:flutter/services.dart';
@@ -15,7 +14,6 @@ import '../obd/bt_channel.dart';
 import '../obd/pids.dart';
 import '../nav/nav_service.dart';
 import 'drive_panels.dart';
-import 'neon_dash.dart';
 import 'map_tiles.dart';
 import 'vehicle_avatar.dart';
 import 'sport_theme.dart';
@@ -63,47 +61,37 @@ class _DriveModePageState extends State<DriveModePage> {
 
   // ---------- voice commands ----------
 
-  final _stt = SpeechToText();
   bool _listening = false;
   String _heard = '';
 
+  /// Uses the phone's speech recognizer (Google's voice popup), which works
+  /// on Samsung too, then runs the command.
   Future<void> _voice() async {
-    if (_listening) {
-      await _stt.stop();
-      setState(() => _listening = false);
-      return;
-    }
-    final ok = await _stt.initialize(
-      onError: (_) {
-        if (mounted) setState(() => _listening = false);
-      },
-      onStatus: (st) {
-        if ((st == 'done' || st == 'notListening') && mounted) {
-          setState(() => _listening = false);
-        }
-      },
-    );
-    if (!ok) {
-      _say(tr('التعرف على الصوت مش متاح على الموبايل ده'));
+    if (_listening) return;
+    if (!(await Permission.microphone.request()).isGranted) {
+      _say(tr('اسمح بإذن الميكروفون'));
       return;
     }
     setState(() {
       _listening = true;
       _heard = '';
     });
-    await _stt.listen(
-      localeId: Lang.isEn ? 'en_US' : 'ar_EG',
-      pauseFor: const Duration(seconds: 3),
-      listenFor: const Duration(seconds: 15),
-      onResult: (r) {
-        if (!mounted) return;
-        setState(() => _heard = r.recognizedWords);
-        if (r.finalResult) {
-          setState(() => _listening = false);
-          _handle(r.recognizedWords);
-        }
-      },
-    );
+    String? text;
+    try {
+      text = await App.obd.bt.listen(Lang.isEn ? 'en-US' : 'ar-EG');
+    } catch (_) {
+      text = null;
+    }
+    if (!mounted) return;
+    setState(() {
+      _listening = false;
+      _heard = text ?? '';
+    });
+    if (text == null) {
+      _say(tr('التعرف على الصوت مش متاح على الموبايل ده'));
+    } else if (text.trim().isNotEmpty) {
+      _handle(text);
+    }
   }
 
   void _say(String s) =>
@@ -665,7 +653,6 @@ class _DriveModePageState extends State<DriveModePage> {
     final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: App.settings.driveStyle == 'neon' ? neonBg : null,
       body: SafeArea(
         child: ListenableBuilder(
           listenable: Listenable.merge([obd, trips, App.maintenance, App.fuel, s, App.nav, App.road]),
@@ -679,8 +666,6 @@ class _DriveModePageState extends State<DriveModePage> {
             final range = litres == null ? null : litres / avg * 100;
             final hot = coolant != null && coolant >= 105;
             final redline = rpm != null && rpm >= 6000;
-            final neon = s.driveStyle == 'neon';
-            final neonFull = neon && _panel == _Panel.gauges;
 
             Widget big(String label, String value, String unit,
                     {Color? color, double size = 64}) =>
@@ -733,19 +718,10 @@ class _DriveModePageState extends State<DriveModePage> {
                       if (App.maintenance.odometerKm != null)
                         Text(tr('العداد ${fmt(App.maintenance.odometerKm)} كم'),
                             style: TextStyle(color: scheme.onSurfaceVariant)),
-                      IconButton(
-                        tooltip: tr('شكل العدادات'),
-                        onPressed: () => s.setDriveStyle(
-                            neon ? 'classic' : 'neon'),
-                        icon: Icon(neon
-                            ? Icons.grid_view_rounded
-                            : Icons.speed_rounded,
-                            color: neon ? neonCyan : null),
-                      ),
                     ],
                   ),
                   // Shift light: 12 blocks, green → amber → red up to 6000 rpm.
-                  if (!neonFull) Padding(
+                  Padding(
                     padding: const EdgeInsets.symmetric(vertical: 6),
                     child: Row(
                       children: [
@@ -769,12 +745,6 @@ class _DriveModePageState extends State<DriveModePage> {
                       ],
                     ),
                   ),
-                  if (neonFull)
-                    const Expanded(child: Padding(
-                      padding: EdgeInsets.only(top: 6),
-                      child: NeonDash(),
-                    ))
-                  else
                   Expanded(
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,

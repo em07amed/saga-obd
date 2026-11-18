@@ -151,6 +151,7 @@ class MainActivity : FlutterActivity() {
                     result.success(audio().isMicrophoneMute)
                 }
                 "callCurrent" -> result.success(callInfo())
+                "listen" -> listen(call.argument<String>("lang") ?: "ar-EG", result)
                 "callerIdRole" -> result.success(requestCallerIdRole())
                 "mediaKey" -> {
                     mediaKey(call.argument<String>("key") ?: "play_pause")
@@ -663,6 +664,44 @@ class MainActivity : FlutterActivity() {
             startActivityForResult(rm.createRequestRoleIntent(role), 7701)
             false
         } catch (_: Exception) { false }
+    }
+
+    // ---- voice input via the system recognizer popup ----
+    private var listenResult: MethodChannel.Result? = null
+
+    private fun listen(lang: String, result: MethodChannel.Result) {
+        listenResult?.success("")
+        val i = Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, lang)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, lang)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT,
+                if (lang.startsWith("ar")) "قول الأمر…" else "Say a command…")
+        // Prefer Google's recognizer when present (most reliable for Arabic).
+        val google = Intent(i).setPackage("com.google.android.googlequicksearchbox")
+        val target = if (google.resolveActivity(packageManager) != null) google else i
+        try {
+            listenResult = result
+            @Suppress("DEPRECATION")
+            startActivityForResult(target, 7702)
+        } catch (_: Exception) {
+            listenResult = null
+            result.success(null)
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 7702) {
+            val text = if (resultCode == RESULT_OK)
+                data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)
+                    ?.firstOrNull() ?: ""
+            else ""
+            listenResult?.success(text)
+            listenResult = null
+        }
     }
 
     private fun bringToFront() {

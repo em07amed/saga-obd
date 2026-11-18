@@ -156,6 +156,11 @@ class BtChannel {
     ];
   }
 
+  /// One voice phrase via the system recognizer. '' if nothing was heard,
+  /// null if no recognizer is available.
+  Future<String?> listen(String lang) =>
+      _method.invokeMethod<String>('listen', {'lang': lang});
+
   Future<void> call(String number) =>
       _method.invokeMethod('call', {'number': number});
 
