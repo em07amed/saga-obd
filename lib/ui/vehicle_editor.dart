@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 
 import '../main.dart';
 import '../settings.dart';
+import '../car_catalog.dart';
 import '../vehicle.dart';
+import 'brand_badge.dart';
 import '../l10n.dart';
 
 /// Add or edit a vehicle. Any make/model works: the app reads standard OBD2,
@@ -30,7 +32,8 @@ class _VehicleEditorState extends State<VehicleEditor> {
     super.initState();
     final v = widget.vehicle;
     _name = TextEditingController(text: v?.name ?? '');
-    _make = TextEditingController(text: v?.make ?? '');
+    _make = TextEditingController(text: v?.make ?? '')
+      ..addListener(() => setState(() {})); // badge + model list follow make
     _model = TextEditingController(text: v?.model ?? '');
     _year = TextEditingController(text: v?.year?.toString() ?? '');
     _tank = TextEditingController(text: _num(v?.tankL));
@@ -131,16 +134,46 @@ class _VehicleEditorState extends State<VehicleEditor> {
       body: ListView(
         padding: EdgeInsets.all(16),
         children: [
-          TextField(
-            controller: _make,
-            decoration: InputDecoration(
-                labelText: tr('الماركة'), hintText: tr('مثلاً: Hyundai، Toyota')),
-          ),
-          TextField(
+          Row(children: [
+            BrandBadge(_make.text, size: 48),
+            const SizedBox(width: 12),
+            Expanded(
+              child: DropdownMenu<String>(
+                controller: _make,
+                expandedInsets: EdgeInsets.zero,
+                enableFilter: true,
+                requestFocusOnTap: true,
+                menuHeight: 320,
+                label: Text(tr('الماركة')),
+                hintText: tr('اختار أو اكتب'),
+                dropdownMenuEntries: [
+                  for (final m in carCatalog.keys)
+                    DropdownMenuEntry(
+                      value: m,
+                      label: m,
+                      leadingIcon: BrandBadge(m, size: 28),
+                    ),
+                ],
+                onSelected: (_) => setState(() => _model.clear()),
+              ),
+            ),
+          ]),
+          const SizedBox(height: 12),
+          DropdownMenu<String>(
+            key: ValueKey(_make.text), // refresh models when make changes
             controller: _model,
-            decoration: InputDecoration(
-                labelText: tr('الموديل'), hintText: tr('مثلاً: Elantra، Corolla')),
+            expandedInsets: EdgeInsets.zero,
+            enableFilter: true,
+            requestFocusOnTap: true,
+            menuHeight: 320,
+            label: Text(tr('الموديل')),
+            hintText: tr('اختار أو اكتب'),
+            dropdownMenuEntries: [
+              for (final m in carCatalog[_make.text.trim()] ?? const <String>[])
+                DropdownMenuEntry(value: m, label: m),
+            ],
           ),
+          const SizedBox(height: 4),
           TextField(
             controller: _year,
             keyboardType: TextInputType.number,

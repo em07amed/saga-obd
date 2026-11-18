@@ -499,4 +499,5 @@ const Map<String, String> _en = {
   'تنبيه الرادارات': 'Speed camera alerts',
   'قبل الرادار بـ 600 متر، والبيانات ممكن تكون ناقصة':
       '600 m before a camera; data may be incomplete',
+  'اختار أو اكتب': 'Pick or type',
 };

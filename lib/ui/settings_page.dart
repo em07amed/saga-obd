@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../main.dart';
 import '../obd/bt_channel.dart';
 import '../settings.dart';
+import 'brand_badge.dart';
 import 'vehicle_editor.dart';
 import 'widgets.dart';
 import '../l10n.dart';
@@ -177,14 +178,17 @@ class SettingsPage extends StatelessWidget {
           _Header(tr('العربيات')),
           for (final v in s.vehicles)
             ListTile(
-              leading: Icon(
-                v.id == s.vehicle.id
-                    ? Icons.radio_button_checked
-                    : Icons.radio_button_unchecked,
-                color: v.id == s.vehicle.id
-                    ? Theme.of(context).colorScheme.primary
-                    : null,
-              ),
+              leading: Stack(clipBehavior: Clip.none, children: [
+                BrandBadge(v.make),
+                if (v.id == s.vehicle.id)
+                  PositionedDirectional(
+                    end: -4,
+                    bottom: -4,
+                    child: Icon(Icons.check_circle,
+                        size: 20,
+                        color: Theme.of(context).colorScheme.primary),
+                  ),
+              ]),
               title: Text(v.name),
               subtitle: v.subtitle.isEmpty ? null : Text(v.subtitle),
               trailing: IconButton(
