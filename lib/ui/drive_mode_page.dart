@@ -9,6 +9,8 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../main.dart';
 import '../obd/pids.dart';
+import '../nav/nav_service.dart';
+import 'drive_panels.dart';
 import 'map_tiles.dart';
 import 'sport_theme.dart';
 import 'widgets.dart';
@@ -22,17 +24,55 @@ class DriveModePage extends StatefulWidget {
   State<DriveModePage> createState() => _DriveModePageState();
 }
 
+enum _Panel { gauges, map, music, phone }
+
 class _DriveModePageState extends State<DriveModePage> {
-  bool _map = false;
+  _Panel _panel = _Panel.gauges;
+  bool get _map => _panel == _Panel.map;
+  final _search = TextEditingController();
+  List<Place>? _results;
+  bool _searching = false;
+
+  void _show(_Panel p) {
+    setState(() => _panel = _panel == p ? _Panel.gauges : p);
+    if (p == _Panel.map) _startGps();
+  }
+
+  Future<void> _doSearch(String q) async {
+    if (q.trim().isEmpty) return;
+    setState(() => _searching = true);
+    try {
+      final p = _pos;
+      final r = await App.nav
+          .search(q, p == null ? null : LatLng(p.latitude, p.longitude));
+      if (mounted) setState(() => _results = r);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(tr('البحث محتاج نت'))));
+      }
+    }
+    if (mounted) setState(() => _searching = false);
+  }
+
+  Future<void> _go(Place place) async {
+    final p = _pos;
+    if (p == null) return;
+    setState(() {
+      _results = null;
+      _follow = true;
+    });
+    FocusScope.of(context).unfocus();
+    await App.nav.start(place, LatLng(p.latitude, p.longitude));
+  }
   final _mapCtl = MapController();
   StreamSubscription<Position>? _gps;
   Position? _pos;
   final List<LatLng> _path = [];
   bool _follow = true;
 
-  Future<void> _toggleMap() async {
-    setState(() => _map = !_map);
-    if (_map && _gps == null) {
+  Future<void> _startGps() async {
+    if (_gps == null) {
       final perm = await Geolocator.checkPermission();
       if (perm == LocationPermission.denied ||
           perm == LocationPermission.deniedForever) {
@@ -50,6 +90,7 @@ class _DriveModePageState extends State<DriveModePage> {
           _pos = p;
           if (p.accuracy < 30) _path.add(at);
         });
+        App.nav.update(at); // turn-by-turn keeps running on any panel
         if (_map && _follow) {
           // Zoom out a little at speed so more road ahead is visible.
           final kmh = p.speed * 3.6;
@@ -77,6 +118,8 @@ class _DriveModePageState extends State<DriveModePage> {
       );
     }
     final at = LatLng(p.latitude, p.longitude);
+    final nav = App.nav;
+    final step = nav.next;
     return Card(
       clipBehavior: Clip.antiAlias,
       child: Stack(children: [
@@ -94,11 +137,27 @@ class _DriveModePageState extends State<DriveModePage> {
           ),
           children: [
             mapTiles(context),
+            if (nav.route.length > 1)
+              PolylineLayer(polylines: [
+                Polyline(
+                    points: nav.route,
+                    color: const Color(0xFF1E88E5),
+                    strokeWidth: 8,
+                    borderColor: Colors.white,
+                    borderStrokeWidth: 2),
+              ]),
             if (_path.length > 1)
               PolylineLayer(polylines: [
                 Polyline(points: _path, color: scheme.primary, strokeWidth: 5),
               ]),
             MarkerLayer(markers: [
+              if (nav.destination != null)
+                Marker(
+                  point: nav.destination!.at,
+                  width: 34,
+                  height: 34,
+                  child: mapPin(const Color(0xFFD32F2F), Icons.flag),
+                ),
               Marker(
                 point: at,
                 width: 40,
@@ -117,6 +176,141 @@ class _DriveModePageState extends State<DriveModePage> {
             mapAttribution(),
           ],
         ),
+        // Turn-by-turn banner while navigating, search bar otherwise.
+        if (nav.active && step != null)
+          PositionedDirectional(
+            top: 8,
+            start: 8,
+            end: 8,
+            child: Material(
+              color: const Color(0xFF1E88E5),
+              borderRadius: BorderRadius.circular(14),
+              elevation: 4,
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: Row(children: [
+                  Icon(step.icon, size: 44, color: Colors.white),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(NavService.fmtDist(nav.toNextM),
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 24,
+                                fontWeight: FontWeight.w900)),
+                        Text(tr(step.text),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                color: Colors.white, fontSize: 16)),
+                      ],
+                    ),
+                  ),
+                ]),
+              ),
+            ),
+          )
+        else
+          PositionedDirectional(
+            top: 8,
+            start: 8,
+            end: 8,
+            child: Material(
+              elevation: 3,
+              borderRadius: BorderRadius.circular(28),
+              color: scheme.surface,
+              child: TextField(
+                controller: _search,
+                textInputAction: TextInputAction.search,
+                onSubmitted: _doSearch,
+                decoration: InputDecoration(
+                  hintText: tr('رايح فين؟'),
+                  prefixIcon: _searching
+                      ? const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: SizedBox(
+                              width: 18,
+                              height: 18,
+                              child:
+                                  CircularProgressIndicator(strokeWidth: 2)))
+                      : const Icon(Icons.search),
+                  suffixIcon: _results != null
+                      ? IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => setState(() => _results = null))
+                      : null,
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+            ),
+          ),
+        if (_results != null && !nav.active)
+          PositionedDirectional(
+            top: 64,
+            start: 8,
+            end: 8,
+            bottom: 8,
+            child: Material(
+              elevation: 3,
+              borderRadius: BorderRadius.circular(14),
+              color: scheme.surface,
+              child: _results!.isEmpty
+                  ? Center(child: Text(tr('ما لقيتش نتايج')))
+                  : ListView(children: [
+                      for (final r in _results!)
+                        ListTile(
+                          leading: const Icon(Icons.place),
+                          title: Text(r.name,
+                              maxLines: 1, overflow: TextOverflow.ellipsis),
+                          subtitle: Text(r.detail,
+                              maxLines: 1, overflow: TextOverflow.ellipsis),
+                          onTap: () => _go(r),
+                        ),
+                    ]),
+            ),
+          ),
+        if (nav.routing)
+          const Center(child: CircularProgressIndicator()),
+        if (nav.error != null)
+          PositionedDirectional(
+            bottom: 60,
+            start: 8,
+            end: 8,
+            child: Card(
+                child: ListTile(
+                    leading: const Icon(Icons.wifi_off),
+                    title: Text(nav.error!))),
+          ),
+        // Remaining distance / time and stop button.
+        if (nav.active)
+          PositionedDirectional(
+            bottom: 8,
+            start: 8,
+            child: Material(
+              elevation: 3,
+              borderRadius: BorderRadius.circular(24),
+              color: scheme.surface,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Text(
+                      '${NavService.fmtDist(nav.remainingM)} • ${nav.remaining.inMinutes} ${tr('د')}',
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(width: 8),
+                  TextButton.icon(
+                    onPressed: nav.stop,
+                    icon: Icon(Icons.close, color: AppColors.danger(context)),
+                    label: Text(tr('إنهاء'),
+                        style: TextStyle(color: AppColors.danger(context))),
+                  ),
+                ]),
+              ),
+            ),
+          ),
         if (!_follow)
           PositionedDirectional(
             bottom: 12,
@@ -142,6 +336,7 @@ class _DriveModePageState extends State<DriveModePage> {
         [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     WakelockPlus.enable(); // screen stays on only in drive mode
+    _startGps();
   }
 
   @override
@@ -150,6 +345,7 @@ class _DriveModePageState extends State<DriveModePage> {
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     WakelockPlus.disable();
     _gps?.cancel();
+    _search.dispose();
     super.dispose();
   }
 
@@ -163,7 +359,7 @@ class _DriveModePageState extends State<DriveModePage> {
     return Scaffold(
       body: SafeArea(
         child: ListenableBuilder(
-          listenable: Listenable.merge([obd, trips, App.maintenance, App.fuel, s]),
+          listenable: Listenable.merge([obd, trips, App.maintenance, App.fuel, s, App.nav]),
           builder: (context, _) {
             final v = obd.values;
             final rpm = v[Pids.rpm];
@@ -211,12 +407,6 @@ class _DriveModePageState extends State<DriveModePage> {
                         iconSize: 28,
                         onPressed: () => Navigator.pop(context),
                         icon: Icon(Icons.close),
-                      ),
-                      IconButton.filledTonal(
-                        tooltip: _map ? tr('العدادات') : tr('الخريطة'),
-                        iconSize: 26,
-                        onPressed: _toggleMap,
-                        icon: Icon(_map ? Icons.speed : Icons.map),
                       ),
                       Expanded(
                         child: Text('${s.vehicle.name} • ${obd.status}',
@@ -322,7 +512,13 @@ class _DriveModePageState extends State<DriveModePage> {
                         ),
                         Expanded(
                           flex: 4,
-                          child: _map ? _liveMap(context) : Column(
+                          child: _panel == _Panel.map
+                              ? _liveMap(context)
+                              : _panel == _Panel.music
+                                  ? const MusicPanel()
+                                  : _panel == _Panel.phone
+                                      ? const PhonePanel()
+                                      : Column(
                             children: [
                               Expanded(
                                 child: Row(children: [
@@ -391,7 +587,7 @@ class _DriveModePageState extends State<DriveModePage> {
                   ),
                   // Car-home dock, like a head unit: other apps + media.
                   const SizedBox(height: 8),
-                  _Dock(),
+                  _Dock(current: _panel, onPanel: _show),
                 ],
               ),
             );
@@ -403,18 +599,22 @@ class _DriveModePageState extends State<DriveModePage> {
 }
 
 class _Dock extends StatelessWidget {
+  final _Panel current;
+  final void Function(_Panel) onPanel;
+  const _Dock({required this.current, required this.onPanel});
+
   @override
   Widget build(BuildContext context) {
     final bt = App.obd.bt;
     final scheme = Theme.of(context).colorScheme;
 
     Widget btn(IconData icon, String label, VoidCallback onTap,
-            {bool accent = false}) =>
+            {bool active = false}) =>
         Expanded(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: Material(
-              color: accent ? scheme.primary : scheme.surfaceContainerHighest,
+              color: active ? scheme.primary : scheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(14),
               child: InkWell(
                 borderRadius: BorderRadius.circular(14),
@@ -429,7 +629,7 @@ class _Dock extends StatelessWidget {
                     children: [
                       Icon(icon,
                           size: 28,
-                          color: accent ? scheme.onPrimary : scheme.onSurface),
+                          color: active ? scheme.onPrimary : scheme.onSurface),
                       if (label.isNotEmpty) ...[
                         const SizedBox(width: 6),
                         Flexible(
@@ -437,7 +637,7 @@ class _Dock extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                   fontWeight: FontWeight.w600,
-                                  color: accent
+                                  color: active
                                       ? scheme.onPrimary
                                       : scheme.onSurface)),
                         ),
@@ -450,22 +650,17 @@ class _Dock extends StatelessWidget {
           ),
         );
 
-    Future<void> open(String kind) async {
-      final ok = await bt.launch(kind).catchError((_) => false);
-      if (!ok && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(tr('مفيش تطبيق مناسب على الموبايل'))));
-      }
-    }
-
     return Row(children: [
-      btn(Icons.navigation, tr('خرائط'), () => open('maps')),
-      btn(Icons.skip_previous, '', () => bt.mediaKey('prev')),
-      btn(Icons.play_arrow, '', () => bt.mediaKey('play_pause'), accent: true),
-      btn(Icons.skip_next, '', () => bt.mediaKey('next')),
-      btn(Icons.library_music, tr('موسيقى'), () => open('music')),
-      btn(Icons.call, tr('مكالمة'), () => open('dialer')),
-      btn(Icons.mic, tr('المساعد'), () => open('assistant')),
+      btn(Icons.speed, tr('العدادات'), () => onPanel(_Panel.gauges),
+          active: current == _Panel.gauges),
+      btn(Icons.navigation, tr('خرائط'), () => onPanel(_Panel.map),
+          active: current == _Panel.map),
+      btn(Icons.library_music, tr('موسيقى'), () => onPanel(_Panel.music),
+          active: current == _Panel.music),
+      btn(Icons.call, tr('مكالمة'), () => onPanel(_Panel.phone),
+          active: current == _Panel.phone),
+      btn(Icons.play_arrow, '', () => bt.mediaControl('play_pause')),
+      btn(Icons.mic, tr('المساعد'), () => bt.launch('assistant')),
     ]);
   }
 }

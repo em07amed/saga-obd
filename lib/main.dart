@@ -9,6 +9,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'alerts.dart';
 import 'fuel/fuel_log.dart';
 import 'maintenance/maintenance.dart';
+import 'nav/nav_service.dart';
 import 'obd/bt_channel.dart';
 import 'obd/obd_service.dart';
 import 'settings.dart';
@@ -31,6 +32,7 @@ class App {
   static late final MaintenanceService maintenance;
   static late final FuelLogService fuel;
   static late final AlertService alerts;
+  static late final NavService nav;
 }
 
 Future<void> main() async {
@@ -48,6 +50,7 @@ Future<void> main() async {
   await App.maintenance.load();
   App.fuel = FuelLogService(App.db, App.settings, App.obd, App.trips);
   await App.fuel.load();
+  App.nav = NavService(App.obd.bt);
   App.alerts =
       AlertService(App.obd, App.settings, App.maintenance, App.obd.bt);
   runApp(CarObdApp());

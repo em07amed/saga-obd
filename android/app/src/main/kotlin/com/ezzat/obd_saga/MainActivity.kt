@@ -92,6 +92,33 @@ class MainActivity : FlutterActivity() {
                     )
                     result.success(null)
                 }
+                "nowPlaying" -> result.success(nowPlaying())
+                "mediaControl" -> {
+                    mediaControl(call.argument<String>("action") ?: "play_pause")
+                    result.success(null)
+                }
+                "openNotificationAccess" -> {
+                    try {
+                        startActivity(Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                    } catch (_: Exception) {}
+                    result.success(null)
+                }
+                "contacts" -> io.execute {
+                    val list = try { contacts() } catch (_: Exception) { emptyList() }
+                    main.post { result.success(list) }
+                }
+                "call" -> {
+                    val number = call.argument<String>("number") ?: ""
+                    try {
+                        startActivity(
+                            Intent(Intent.ACTION_CALL, android.net.Uri.parse("tel:" + android.net.Uri.encode(number)))
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("CALL", e.message, null)
+                    }
+                }
                 "mediaKey" -> {
                     mediaKey(call.argument<String>("key") ?: "play_pause")
                     result.success(null)
@@ -245,6 +272,96 @@ class MainActivity : FlutterActivity() {
             return
         }
         if (ttsReady) say(text, lang) else pendingSpeech.add(text to lang)
+    }
+
+    // ---- now playing (needs notification access) ----
+
+    private fun hasNotificationAccess(): Boolean {
+        val flat = android.provider.Settings.Secure.getString(
+            contentResolver, "enabled_notification_listeners") ?: return false
+        return flat.contains(packageName)
+    }
+
+    private fun activeController(): android.media.session.MediaController? {
+        if (!hasNotificationAccess()) return null
+        return try {
+            val msm = getSystemService(Context.MEDIA_SESSION_SERVICE) as android.media.session.MediaSessionManager
+            val sessions = msm.getActiveSessions(
+                android.content.ComponentName(this, MediaListenerService::class.java))
+            sessions.firstOrNull {
+                it.playbackState?.state == android.media.session.PlaybackState.STATE_PLAYING
+            } ?: sessions.firstOrNull()
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun nowPlaying(): Map<String, Any?> {
+        if (!hasNotificationAccess()) return mapOf("access" to false)
+        val c = activeController() ?: return mapOf("access" to true)
+        val md = c.metadata
+        val art = md?.getBitmap(android.media.MediaMetadata.METADATA_KEY_ALBUM_ART)
+            ?: md?.getBitmap(android.media.MediaMetadata.METADATA_KEY_ART)
+        var artBytes: ByteArray? = null
+        if (art != null) {
+            val scaled = android.graphics.Bitmap.createScaledBitmap(art, 256, 256, true)
+            val out = java.io.ByteArrayOutputStream()
+            scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, out)
+            artBytes = out.toByteArray()
+        }
+        val appName = try {
+            packageManager.getApplicationLabel(
+                packageManager.getApplicationInfo(c.packageName, 0)).toString()
+        } catch (_: Exception) { c.packageName }
+        return mapOf(
+            "access" to true,
+            "title" to md?.getString(android.media.MediaMetadata.METADATA_KEY_TITLE),
+            "artist" to (md?.getString(android.media.MediaMetadata.METADATA_KEY_ARTIST)
+                ?: md?.getString(android.media.MediaMetadata.METADATA_KEY_ALBUM_ARTIST)),
+            "app" to appName,
+            "playing" to (c.playbackState?.state == android.media.session.PlaybackState.STATE_PLAYING),
+            "art" to artBytes
+        )
+    }
+
+    private fun mediaControl(action: String) {
+        val c = activeController()
+        if (c == null) {
+            mediaKey(action)
+            return
+        }
+        val t = c.transportControls
+        when (action) {
+            "next" -> t.skipToNext()
+            "prev" -> t.skipToPrevious()
+            else -> if (c.playbackState?.state == android.media.session.PlaybackState.STATE_PLAYING) t.pause() else t.play()
+        }
+    }
+
+    // ---- contacts ----
+
+    private fun contacts(): List<Map<String, Any>> {
+        val out = mutableListOf<Map<String, Any>>()
+        val seen = HashSet<String>()
+        val uri = android.provider.ContactsContract.CommonDataKinds.Phone.CONTENT_URI
+        val cols = arrayOf(
+            android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+            android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER,
+            android.provider.ContactsContract.CommonDataKinds.Phone.STARRED
+        )
+        contentResolver.query(uri, cols, null, null,
+            android.provider.ContactsContract.CommonDataKinds.Phone.STARRED + " DESC, " +
+                android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC"
+        )?.use { cur ->
+            while (cur.moveToNext() && out.size < 2000) {
+                val name = cur.getString(0) ?: continue
+                val number = cur.getString(1) ?: continue
+                val key = name + number.filter { it.isDigit() }.takeLast(9)
+                if (!seen.add(key)) continue
+                out.add(mapOf("name" to name, "number" to number, "starred" to (cur.getInt(2) == 1)))
+            }
+        }
+        return out
     }
 
     /** Play/pause/next/previous for whatever music app is playing. */

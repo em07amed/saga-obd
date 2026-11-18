@@ -1,4 +1,24 @@
+import 'dart:typed_data';
+
 import 'package:flutter/services.dart';
+
+class NowPlaying {
+  final bool access;
+  final String? title;
+  final String? artist;
+  final String? app;
+  final bool playing;
+  final Uint8List? art;
+  const NowPlaying(
+      this.access, this.title, this.artist, this.app, this.playing, this.art);
+}
+
+class Contact {
+  final String name;
+  final String number;
+  final bool starred;
+  const Contact(this.name, this.number, this.starred);
+}
 
 class BtDevice {
   final String name;
@@ -40,6 +60,42 @@ class BtChannel {
       .invokeMethod('startKeepAlive', {'title': title, 'text': text});
 
   Future<void> stopKeepAlive() => _method.invokeMethod('stopKeepAlive');
+
+  /// What the phone is playing (needs notification access).
+  Future<NowPlaying> nowPlaying() async {
+    final m = Map<String, dynamic>.from(
+        await _method.invokeMethod<Map>('nowPlaying') ?? const {});
+    return NowPlaying(
+      m['access'] == true,
+      m['title'] as String?,
+      m['artist'] as String?,
+      m['app'] as String?,
+      m['playing'] == true,
+      m['art'] as Uint8List?,
+    );
+  }
+
+  /// play_pause | next | prev on the active player's media session.
+  Future<void> mediaControl(String action) =>
+      _method.invokeMethod('mediaControl', {'action': action});
+
+  Future<void> openNotificationAccess() =>
+      _method.invokeMethod('openNotificationAccess');
+
+  Future<List<Contact>> contacts() async {
+    final list = await _method.invokeListMethod<dynamic>('contacts') ?? [];
+    return [
+      for (final e in list)
+        (() {
+          final m = Map<String, dynamic>.from(e as Map);
+          return Contact(m['name'] as String, m['number'] as String,
+              m['starred'] == true);
+        })(),
+    ];
+  }
+
+  Future<void> call(String number) =>
+      _method.invokeMethod('call', {'number': number});
 
   /// Media control for the phone's current player: play_pause | next | prev.
   Future<void> mediaKey(String key) =>
