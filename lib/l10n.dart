@@ -482,4 +482,6 @@ const Map<String, String> _en = {
   'دوّر على اسم أو رقم': 'Search name or number',
   'مفيش مفضلين. علّم جهات الاتصال بنجمة في تطبيق الأسماء، أو دوّر فوق.':
       'No favourites. Star contacts in your Contacts app, or search above.',
+  'التحكم في الموسيقى': 'Music controls',
+  'شغّل الموسيقى من أي تطبيق وتحكّم فيها من هنا': 'Play music in any app and control it here',
 };

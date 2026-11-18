@@ -52,30 +52,7 @@ class _MusicPanelState extends State<MusicPanel> {
     if (np == null) {
       return const Card(child: Center(child: CircularProgressIndicator()));
     }
-    if (!np.access) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.library_music, size: 48),
-              const SizedBox(height: 8),
-              Text(
-                tr('عشان أعرض الأغنية اللي شغالة وأتحكم فيها، محتاج صلاحية قراءة الإشعارات. فعّل Car OBD في الصفحة اللي هتفتح.'),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              FilledButton.icon(
-                onPressed: () => App.obd.bt.openNotificationAccess(),
-                icon: const Icon(Icons.lock_open),
-                label: Text(tr('اسمح')),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
+    final noInfo = !np.access;
     Widget ctl(IconData i, String a, {double size = 44, bool main = false}) =>
         IconButton.filled(
           iconSize: size,
@@ -110,7 +87,10 @@ class _MusicPanelState extends State<MusicPanel> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(np.title ?? tr('مفيش حاجة شغالة'),
+                Text(
+                    noInfo
+                        ? tr('التحكم في الموسيقى')
+                        : np.title ?? tr('مفيش حاجة شغالة'),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context)
@@ -125,11 +105,20 @@ class _MusicPanelState extends State<MusicPanel> {
                 if (np.app != null)
                   Text(np.app!,
                       style: TextStyle(color: scheme.onSurfaceVariant)),
+                if (noInfo)
+                  Text(tr('شغّل الموسيقى من أي تطبيق وتحكّم فيها من هنا'),
+                      style: TextStyle(color: scheme.onSurfaceVariant)),
                 const SizedBox(height: 12),
                 Row(children: [
                   ctl(Icons.skip_previous, 'prev'),
                   const SizedBox(width: 12),
-                  ctl(np.playing ? Icons.pause : Icons.play_arrow, 'play_pause',
+                  ctl(
+                      noInfo
+                          ? Icons.play_arrow
+                          : np.playing
+                              ? Icons.pause
+                              : Icons.play_arrow,
+                      'play_pause',
                       size: 52, main: true),
                   const SizedBox(width: 12),
                   ctl(Icons.skip_next, 'next'),
