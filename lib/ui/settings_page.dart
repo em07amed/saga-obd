@@ -52,6 +52,61 @@ class SettingsPage extends StatelessWidget {
             value: s.alertsOn,
             onChanged: s.setAlerts,
           ),
+          _Header(tr('تنبيه السرعة')),
+          ListTile(
+            leading: Icon(Icons.speed),
+            title: Text(tr('الحد الأقصى')),
+            subtitle: Text(tr('غيّره بسرعة من وضع القيادة')),
+            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+              IconButton(
+                tooltip: '-10',
+                onPressed: () => s.setSpeedLimit(s.speedLimit - 10),
+                icon: Icon(Icons.remove_circle_outline),
+              ),
+              Text('${s.speedLimit.round()}',
+                  textDirection: TextDirection.ltr,
+                  style: Theme.of(context).textTheme.titleLarge),
+              IconButton(
+                tooltip: '+10',
+                onPressed: () => s.setSpeedLimit(s.speedLimit + 10),
+                icon: Icon(Icons.add_circle_outline),
+              ),
+            ]),
+          ),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: SegmentedButton<String>(
+              showSelectedIcon: false,
+              segments: [
+                ButtonSegment(
+                    value: 'voice',
+                    label: Text(tr('رسالة صوتية')),
+                    icon: Icon(Icons.record_voice_over)),
+                ButtonSegment(
+                    value: 'beep',
+                    label: Text(tr('صفارة بس')),
+                    icon: Icon(Icons.notifications_active)),
+                ButtonSegment(
+                    value: 'off',
+                    label: Text(tr('مقفول')),
+                    icon: Icon(Icons.notifications_off)),
+              ],
+              selected: {s.speedAlertMode},
+              onSelectionChanged: (sel) => s.setSpeedAlertMode(sel.first),
+            ),
+          ),
+          ListTile(
+            leading: Icon(Icons.play_circle_outline),
+            title: Text(tr('جرّب تنبيه السرعة')),
+            onTap: () => s.speedAlertMode == 'beep'
+                ? App.obd.bt.beep().catchError((_) {})
+                : App.obd.bt
+                    .speak(
+                        tr('انتبه. سرعتك ${(s.speedLimit + 12).round()}، والحد ${s.speedLimit.round()}.'),
+                        Lang.code)
+                    .catchError((_) {}),
+          ),
+          _Header(tr('تنبيهات العربية')),
           SwitchListTile(
             secondary: Icon(Icons.record_voice_over_outlined),
             title: Text(tr('اقرا التنبيه بصوت')),

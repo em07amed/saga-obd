@@ -23,6 +23,8 @@ class AlertService {
   int _lastDtcCount = 0;
   bool _maintenanceChecked = false;
   DateTime? _engineOnSince;
+  bool _speeding = false;
+  DateTime? _lastSpeedWarn;
 
   AlertService(this.obd, this.settings, this.maintenance, this.bt) {
     obd.addListener(_check);
@@ -43,6 +45,8 @@ class AlertService {
     } else {
       _engineOnSince = null;
     }
+
+    _checkSpeed(v[Pids.speed]);
 
     // Coolant: fire at the configured limit, re-arm 5 °C below it.
     final coolant = v[Pids.coolant];
@@ -100,6 +104,35 @@ class AlertService {
                 : 'تذكير. ميعاد ${d.entry.type} قرّب.'),
             sound: false);
       }
+    }
+  }
+
+  /// Warn when speed goes over the driver's limit; repeat every 20 s while
+  /// still over, re-arm once 3 km/h back under the limit.
+  void _checkSpeed(double? speed) {
+    final mode = settings.speedAlertMode;
+    if (speed == null || mode == 'off') return;
+    final limit = settings.speedLimit;
+    final now = DateTime.now();
+    if (speed > limit) {
+      final due = !_speeding ||
+          _lastSpeedWarn == null ||
+          now.difference(_lastSpeedWarn!) > const Duration(seconds: 20);
+      _speeding = true;
+      if (!due) return;
+      _lastSpeedWarn = now;
+      HapticFeedback.heavyImpact();
+      if (mode == 'beep') {
+        bt.beep().catchError((_) {});
+      } else {
+        bt
+            .speak(
+                tr('انتبه. سرعتك ${speed.round()}، والحد ${limit.round()}.'),
+                Lang.code)
+            .catchError((_) {});
+      }
+    } else if (speed < limit - 3) {
+      _speeding = false;
     }
   }
 

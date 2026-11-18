@@ -91,6 +91,10 @@ class MainActivity : FlutterActivity() {
                     )
                     result.success(null)
                 }
+                "beep" -> {
+                    beep()
+                    result.success(null)
+                }
                 "speak" -> {
                     speak(call.argument<String>("text") ?: "", call.argument<String>("lang") ?: "ar")
                     result.success(null)
@@ -227,6 +231,16 @@ class MainActivity : FlutterActivity() {
             return
         }
         if (ttsReady) say(text, lang) else pendingSpeech.add(text to lang)
+    }
+
+    /** Two short warning beeps, no words. */
+    private fun beep() {
+        try {
+            val tg = android.media.ToneGenerator(android.media.AudioManager.STREAM_ALARM, 100)
+            tg.startTone(android.media.ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 600)
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ tg.release() }, 900)
+        } catch (_: Exception) {
+        }
     }
 
     private fun say(text: String, lang: String) {

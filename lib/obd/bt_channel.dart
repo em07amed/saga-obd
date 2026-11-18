@@ -41,6 +41,9 @@ class BtChannel {
 
   Future<void> stopKeepAlive() => _method.invokeMethod('stopKeepAlive');
 
+  /// Short warning tone without any spoken message.
+  Future<void> beep() => _method.invokeMethod('beep');
+
   /// Speaks [text] with the phone's text-to-speech engine.
   Future<void> speak(String text, String lang) =>
       _method.invokeMethod('speak', {'text': text, 'lang': lang});

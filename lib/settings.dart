@@ -18,6 +18,11 @@ class AppSettings extends ChangeNotifier {
   String lang = 'ar'; // ar | en
   bool alertsOn = true;
   bool voiceAlerts = true;
+
+  /// Speed limit chosen by the driver (km/h) and how to warn when exceeded:
+  /// 'voice' (spoken message), 'beep' (tone, no message) or 'off'.
+  double speedLimit = 100;
+  String speedAlertMode = 'voice';
   double coolantAlert = 80; // °C; 105 is the normal value, 80 for testing
 
   /// Official Egypt pump prices (EGP/L) as of Nov 2026. Editable per vehicle
@@ -53,6 +58,8 @@ class AppSettings extends ChangeNotifier {
     lang = _p.getString('lang') ?? lang;
     alertsOn = _p.getBool('alertsOn') ?? true;
     voiceAlerts = _p.getBool('voiceAlerts') ?? true;
+    speedLimit = _p.getDouble('speedLimit') ?? speedLimit;
+    speedAlertMode = _p.getString('speedAlertMode') ?? speedAlertMode;
     coolantAlert = _p.getDouble('coolantAlert') ?? coolantAlert;
     Lang.code = lang;
 
@@ -130,6 +137,18 @@ class AppSettings extends ChangeNotifier {
   Future<void> setCoolantAlert(double v) async {
     coolantAlert = v;
     await _p.setDouble('coolantAlert', v);
+    notifyListeners();
+  }
+
+  Future<void> setSpeedLimit(double v) async {
+    speedLimit = v.clamp(20, 200).toDouble();
+    await _p.setDouble('speedLimit', speedLimit);
+    notifyListeners();
+  }
+
+  Future<void> setSpeedAlertMode(String mode) async {
+    speedAlertMode = mode;
+    await _p.setString('speedAlertMode', mode);
     notifyListeners();
   }
 

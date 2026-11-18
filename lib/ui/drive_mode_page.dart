@@ -44,7 +44,7 @@ class _DriveModePageState extends State<DriveModePage> {
     return Scaffold(
       body: SafeArea(
         child: ListenableBuilder(
-          listenable: Listenable.merge([obd, trips, App.maintenance, App.fuel]),
+          listenable: Listenable.merge([obd, trips, App.maintenance, App.fuel, s]),
           builder: (context, _) {
             final v = obd.values;
             final rpm = v[Pids.rpm];
@@ -137,8 +137,62 @@ class _DriveModePageState extends State<DriveModePage> {
                         Expanded(
                           flex: 3,
                           child: Card(
-                            child: big(tr('السرعة'), fmt(v[Pids.speed]), tr('كم/س'),
-                                size: 140),
+                            child: Column(children: [
+                              Expanded(
+                                child: big(
+                                  tr('السرعة'),
+                                  fmt(v[Pids.speed]),
+                                  tr('كم/س'),
+                                  size: 140,
+                                  color: (v[Pids.speed] ?? 0) > s.speedLimit &&
+                                          s.speedAlertMode != 'off'
+                                      ? AppColors.danger(context)
+                                      : null,
+                                ),
+                              ),
+                              // Quick speed-limit control for the current road.
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  IconButton(
+                                    tooltip: '-10',
+                                    iconSize: 32,
+                                    onPressed: () =>
+                                        s.setSpeedLimit(s.speedLimit - 10),
+                                    icon: const Icon(Icons.remove_circle_outline),
+                                  ),
+                                  Container(
+                                    width: 56,
+                                    height: 56,
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: Colors.white,
+                                      border: Border.all(
+                                          color: const Color(0xFFD32F2F),
+                                          width: 6),
+                                    ),
+                                    child: Text(
+                                      s.speedAlertMode == 'off'
+                                          ? '—'
+                                          : '${s.speedLimit.round()}',
+                                      style: const TextStyle(
+                                          color: Colors.black,
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w900),
+                                    ),
+                                  ),
+                                  IconButton(
+                                    tooltip: '+10',
+                                    iconSize: 32,
+                                    onPressed: () =>
+                                        s.setSpeedLimit(s.speedLimit + 10),
+                                    icon: const Icon(Icons.add_circle_outline),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                            ]),
                           ),
                         ),
                         Expanded(

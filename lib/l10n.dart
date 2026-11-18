@@ -424,4 +424,16 @@ const Map<String, String> _en = {
   'قرّب.': 'is coming up.',
   'اقرا التنبيه بصوت': 'Speak alerts aloud',
   'جرّب التنبيه الصوتي': 'Test voice alert',
+  // ---- speed alert ----
+  'تنبيه السرعة': 'Speed alert',
+  'تنبيهات العربية': 'Car alerts',
+  'الحد الأقصى': 'Speed limit',
+  'غيّره بسرعة من وضع القيادة': 'Change it quickly from drive mode',
+  'رسالة صوتية': 'Voice',
+  'صفارة بس': 'Beep only',
+  'مقفول': 'Off',
+  'جرّب تنبيه السرعة': 'Test speed alert',
+  'انتبه.': 'Slow down.',
+  'سرعتك': 'Your speed is',
+  'والحد': 'the limit is',
 };
