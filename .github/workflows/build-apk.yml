@@ -36,6 +36,13 @@ jobs:
           cp src/android/app/src/main/kotlin/com/ezzat/obd_saga/*.kt \
              obd_saga/android/app/src/main/kotlin/com/ezzat/obd_saga/
 
+      # Same signing key on every build, so updates install over the
+      # previous version instead of failing with "App not installed".
+      - name: Use the app's fixed signing key
+        run: |
+          mkdir -p ~/.android
+          cp src/android/signing/debug.keystore ~/.android/debug.keystore
+
       - name: Get packages
         working-directory: obd_saga
         run: flutter pub get
