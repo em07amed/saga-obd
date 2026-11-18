@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -6,6 +8,7 @@ import '../settings.dart';
 import '../car_catalog.dart';
 import '../vehicle.dart';
 import 'brand_badge.dart';
+import 'vehicle_avatar.dart';
 import '../l10n.dart';
 
 /// Add or edit a vehicle. Any make/model works: the app reads standard OBD2,
@@ -26,6 +29,12 @@ class _VehicleEditorState extends State<VehicleEditor> {
   late final TextEditingController _tank;
   late final TextEditingController _engine;
   late String _grade;
+  String? _imagePath;
+
+  Future<void> _pickImage() async {
+    final p = await pickVehicleImage();
+    if (p != null) setState(() => _imagePath = p);
+  }
 
   @override
   void initState() {
@@ -39,6 +48,7 @@ class _VehicleEditorState extends State<VehicleEditor> {
     _tank = TextEditingController(text: _num(v?.tankL));
     _engine = TextEditingController(text: _num(v?.displacementL));
     _grade = v?.fuelGrade ?? '92';
+    _imagePath = App.settings.vehicleImage(v?.id);
   }
 
   static String _num(double? x) =>
@@ -89,6 +99,9 @@ class _VehicleEditorState extends State<VehicleEditor> {
     } else {
       await s.updateVehicle(v);
     }
+    if (_imagePath != s.vehicleImage(v.id)) {
+      await s.setVehicleImage(v.id!, _imagePath);
+    }
     if (mounted) Navigator.pop(context);
   }
 
@@ -135,7 +148,24 @@ class _VehicleEditorState extends State<VehicleEditor> {
         padding: EdgeInsets.all(16),
         children: [
           Row(children: [
-            BrandBadge(_make.text, size: 48),
+            GestureDetector(
+              onTap: _pickImage,
+              child: Stack(clipBehavior: Clip.none, children: [
+                _imagePath != null
+                    ? ClipOval(
+                        child: Image.file(File(_imagePath!),
+                            width: 56, height: 56, fit: BoxFit.cover))
+                    : BrandBadge(_make.text, size: 56),
+                PositionedDirectional(
+                  end: -4,
+                  bottom: -4,
+                  child: CircleAvatar(
+                    radius: 12,
+                    child: Icon(Icons.photo_camera, size: 14),
+                  ),
+                ),
+              ]),
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: DropdownMenu<String>(

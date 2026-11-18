@@ -187,6 +187,18 @@ class AppSettings extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Picture the user chose for a vehicle (a file in app storage), if any.
+  String? vehicleImage(int? id) => _p.getString('vehicleImage_$id');
+
+  Future<void> setVehicleImage(int id, String? path) async {
+    if (path == null) {
+      await _p.remove('vehicleImage_$id');
+    } else {
+      await _p.setString('vehicleImage_$id', path);
+    }
+    notifyListeners();
+  }
+
   Future<void> setThemeMode(String mode) async {
     themeMode = mode;
     await _p.setString('themeMode', mode);

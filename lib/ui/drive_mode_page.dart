@@ -12,6 +12,7 @@ import '../obd/pids.dart';
 import '../nav/nav_service.dart';
 import 'drive_panels.dart';
 import 'map_tiles.dart';
+import 'vehicle_avatar.dart';
 import 'sport_theme.dart';
 import 'widgets.dart';
 import '../l10n.dart';
@@ -417,6 +418,8 @@ class _DriveModePageState extends State<DriveModePage> {
                         onPressed: () => Navigator.pop(context),
                         icon: Icon(Icons.close),
                       ),
+                      VehicleAvatar(s.vehicle, size: 32),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Text('${s.vehicle.name} • ${obd.status}',
                             maxLines: 1,

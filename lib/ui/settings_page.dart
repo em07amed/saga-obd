@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import '../main.dart';
 import '../obd/bt_channel.dart';
 import '../settings.dart';
-import 'brand_badge.dart';
+import 'vehicle_avatar.dart';
 import 'vehicle_editor.dart';
 import 'widgets.dart';
 import '../l10n.dart';
@@ -179,7 +179,7 @@ class SettingsPage extends StatelessWidget {
           for (final v in s.vehicles)
             ListTile(
               leading: Stack(clipBehavior: Clip.none, children: [
-                BrandBadge(v.make),
+                VehicleAvatar(v),
                 if (v.id == s.vehicle.id)
                   PositionedDirectional(
                     end: -4,
