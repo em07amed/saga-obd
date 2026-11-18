@@ -1,21 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 
-/// CARTO basemaps (OpenStreetMap data): a clean light map, or a dark one
-/// that matches the dark and sport themes.
+/// OpenStreetMap tiles (no API key). In dark/sport themes the tiles are
+/// darkened on the device so the map matches the rest of the app.
 TileLayer mapTiles(BuildContext context) {
   final dark = Theme.of(context).brightness == Brightness.dark;
   return TileLayer(
-    urlTemplate:
-        'https://{s}.basemaps.cartocdn.com/${dark ? 'dark_all' : 'rastertiles/voyager'}/{z}/{x}/{y}.png',
-    subdomains: const ['a', 'b', 'c', 'd'],
+    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
     userAgentPackageName: 'com.ezzat.obd_saga',
     maxNativeZoom: 19,
+    tileBuilder: dark ? darkModeTileBuilder : null,
   );
 }
 
 Widget mapAttribution() => const SimpleAttributionWidget(
-      source: Text('© OpenStreetMap contributors © CARTO'),
+      source: Text('OpenStreetMap contributors'),
     );
 
 /// Round marker with an icon, used for start/end/events.
