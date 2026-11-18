@@ -436,4 +436,11 @@ const Map<String, String> _en = {
   'انتبه.': 'Slow down.',
   'سرعتك': 'Your speed is',
   'والحد': 'the limit is',
+  // ---- maps ----
+  'مرة فوق': 'times over',
+  'وقفة': 'stops',
+  'بيدوّر على موقعك…': 'Finding your location…',
+  'تتبّع موقعي': 'Follow my location',
+  'العدادات': 'Gauges',
+  'الخريطة': 'Map',
 };

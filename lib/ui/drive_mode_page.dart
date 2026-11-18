@@ -1,9 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart' show LatLng;
 import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../main.dart';
 import '../obd/pids.dart';
+import 'map_tiles.dart';
 import 'sport_theme.dart';
 import 'widgets.dart';
 import '../l10n.dart';
@@ -17,6 +23,118 @@ class DriveModePage extends StatefulWidget {
 }
 
 class _DriveModePageState extends State<DriveModePage> {
+  bool _map = false;
+  final _mapCtl = MapController();
+  StreamSubscription<Position>? _gps;
+  Position? _pos;
+  final List<LatLng> _path = [];
+  bool _follow = true;
+
+  Future<void> _toggleMap() async {
+    setState(() => _map = !_map);
+    if (_map && _gps == null) {
+      final perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied ||
+          perm == LocationPermission.deniedForever) {
+        return;
+      }
+      _gps = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.bestForNavigation,
+          distanceFilter: 5,
+        ),
+      ).listen((p) {
+        if (!mounted) return;
+        final at = LatLng(p.latitude, p.longitude);
+        setState(() {
+          _pos = p;
+          if (p.accuracy < 30) _path.add(at);
+        });
+        if (_map && _follow) {
+          // Zoom out a little at speed so more road ahead is visible.
+          final kmh = p.speed * 3.6;
+          final zoom = kmh > 90 ? 15.0 : kmh > 50 ? 16.0 : 17.0;
+          try {
+            _mapCtl.move(at, zoom);
+          } catch (_) {}
+        }
+      });
+    }
+  }
+
+  Widget _liveMap(BuildContext context) {
+    final p = _pos;
+    final scheme = Theme.of(context).colorScheme;
+    if (p == null) {
+      return Card(
+        child: Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 12),
+            Text(tr('بيدوّر على موقعك…')),
+          ]),
+        ),
+      );
+    }
+    final at = LatLng(p.latitude, p.longitude);
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Stack(children: [
+        FlutterMap(
+          mapController: _mapCtl,
+          options: MapOptions(
+            initialCenter: at,
+            initialZoom: 17,
+            interactionOptions: const InteractionOptions(
+              flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+            ),
+            onPositionChanged: (_, byUser) {
+              if (byUser && _follow) setState(() => _follow = false);
+            },
+          ),
+          children: [
+            mapTiles(context),
+            if (_path.length > 1)
+              PolylineLayer(polylines: [
+                Polyline(points: _path, color: scheme.primary, strokeWidth: 5),
+              ]),
+            MarkerLayer(markers: [
+              Marker(
+                point: at,
+                width: 40,
+                height: 40,
+                child: Transform.rotate(
+                  angle: (p.heading.isNaN ? 0 : p.heading) * 3.14159265 / 180,
+                  child: Icon(Icons.navigation,
+                      size: 40,
+                      color: scheme.primary,
+                      shadows: const [
+                        Shadow(blurRadius: 6, color: Colors.black54)
+                      ]),
+                ),
+              ),
+            ]),
+            mapAttribution(),
+          ],
+        ),
+        if (!_follow)
+          PositionedDirectional(
+            bottom: 12,
+            end: 12,
+            child: FloatingActionButton.small(
+              heroTag: 'recenter',
+              tooltip: tr('تتبّع موقعي'),
+              onPressed: () {
+                setState(() => _follow = true);
+                _mapCtl.move(at, 17);
+              },
+              child: const Icon(Icons.my_location),
+            ),
+          ),
+      ]),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -31,6 +149,7 @@ class _DriveModePageState extends State<DriveModePage> {
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     WakelockPlus.disable();
+    _gps?.cancel();
     super.dispose();
   }
 
@@ -92,6 +211,12 @@ class _DriveModePageState extends State<DriveModePage> {
                         iconSize: 28,
                         onPressed: () => Navigator.pop(context),
                         icon: Icon(Icons.close),
+                      ),
+                      IconButton.filledTonal(
+                        tooltip: _map ? tr('العدادات') : tr('الخريطة'),
+                        iconSize: 26,
+                        onPressed: _toggleMap,
+                        icon: Icon(_map ? Icons.speed : Icons.map),
                       ),
                       Expanded(
                         child: Text('${s.vehicle.name} • ${obd.status}',
@@ -197,7 +322,7 @@ class _DriveModePageState extends State<DriveModePage> {
                         ),
                         Expanded(
                           flex: 4,
-                          child: Column(
+                          child: _map ? _liveMap(context) : Column(
                             children: [
                               Expanded(
                                 child: Row(children: [

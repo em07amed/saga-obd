@@ -2,11 +2,12 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart' show LatLng;
+import 'package:latlong2/latlong.dart' show LatLng, Distance, LengthUnit;
 import 'package:intl/intl.dart' show DateFormat;
 
 import '../main.dart';
 import '../trips/trip_db.dart';
+import 'map_tiles.dart';
 import 'widgets.dart';
 import '../l10n.dart';
 
@@ -253,19 +254,73 @@ class TripDetailPage extends StatelessWidget {
 }
 
 /// Real street map (OpenStreetMap) with the route coloured by speed.
-class _RouteMap extends StatelessWidget {
+class _RouteMap extends StatefulWidget {
   final List<TripSample> pts;
   const _RouteMap(this.pts);
+
+  @override
+  State<_RouteMap> createState() => _RouteMapState();
+}
+
+/// A stretch of the trip: over the speed limit, or stopped.
+class _Event {
+  final TripSample at;
+  final bool speeding;
+  final double value; // max speed, or stop seconds
+  const _Event(this.at, this.speeding, this.value);
+}
+
+class _RouteMapState extends State<_RouteMap> {
+  TripSample? _picked;
+  late final List<_Event> _events = _findEvents();
 
   static Color _speedColor(double? kmh) => Color.lerp(AppColors.routeSlow,
       AppColors.routeFast, ((kmh ?? 0) / 120).clamp(0.0, 1.0))!;
 
+  /// Over-limit stretches (marked at their top speed) and stops of 1 min+.
+  List<_Event> _findEvents() {
+    final limit = App.settings.speedLimit;
+    final out = <_Event>[];
+    TripSample? peak;
+    TripSample? stopStart;
+    for (final p in widget.pts) {
+      final v = p.speed ?? 0;
+      if (v > limit) {
+        if (peak == null || v > (peak.speed ?? 0)) peak = p;
+      } else if (peak != null) {
+        out.add(_Event(peak, true, peak.speed ?? 0));
+        peak = null;
+      }
+      if (v < 1) {
+        stopStart ??= p;
+      } else if (stopStart != null) {
+        final secs = p.ts.difference(stopStart.ts).inSeconds;
+        if (secs >= 60) out.add(_Event(stopStart, false, secs.toDouble()));
+        stopStart = null;
+      }
+    }
+    if (peak != null) out.add(_Event(peak, true, peak.speed ?? 0));
+    return out;
+  }
+
+  void _onTap(LatLng at) {
+    const d = Distance();
+    TripSample? best;
+    var bestM = double.infinity;
+    for (final p in widget.pts) {
+      final m = d.as(LengthUnit.Meter, at, LatLng(p.lat!, p.lng!));
+      if (m < bestM) {
+        bestM = m;
+        best = p;
+      }
+    }
+    setState(() => _picked = bestM < 150 ? best : null);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final pts = widget.pts;
     final points = [for (final p in pts) LatLng(p.lat!, p.lng!)];
-    final dark = Theme.of(context).brightness == Brightness.dark;
-
-    // One short polyline per segment so each can carry its own colour.
     final segments = <Polyline>[
       for (var i = 1; i < points.length; i++)
         Polyline(
@@ -274,58 +329,118 @@ class _RouteMap extends StatelessWidget {
           strokeWidth: 5,
         ),
     ];
+    final picked = _picked;
+    final speeding = _events.where((e) => e.speeding).length;
+    final stops = _events.length - speeding;
 
-    Widget pin(Color c, IconData icon) => Container(
-          decoration: BoxDecoration(
-            color: c,
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 2),
+    return Stack(children: [
+      FlutterMap(
+        options: MapOptions(
+          initialCameraFit: points.length > 1
+              ? CameraFit.bounds(
+                  bounds: LatLngBounds.fromPoints(points),
+                  padding: const EdgeInsets.all(40),
+                )
+              : null,
+          initialCenter: points.first,
+          initialZoom: 15,
+          interactionOptions: const InteractionOptions(
+            flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
           ),
-          child: Icon(icon, size: 16, color: Colors.white),
-        );
-
-    return FlutterMap(
-      options: MapOptions(
-        initialCameraFit: points.length > 1
-            ? CameraFit.bounds(
-                bounds: LatLngBounds.fromPoints(points),
-                padding: EdgeInsets.all(32),
-              )
-            : null,
-        initialCenter: points.first,
-        initialZoom: 15,
-        interactionOptions: InteractionOptions(
-          flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+          onTap: (_, at) => _onTap(at),
         ),
+        children: [
+          mapTiles(context),
+          PolylineLayer(polylines: segments),
+          MarkerLayer(markers: [
+            for (final e in _events)
+              Marker(
+                point: LatLng(e.at.lat!, e.at.lng!),
+                width: 26,
+                height: 26,
+                child: GestureDetector(
+                  onTap: () => setState(() => _picked = e.at),
+                  child: e.speeding
+                      ? mapPin(AppColors.danger(context), Icons.speed, size: 14)
+                      : mapPin(const Color(0xFF546E7A), Icons.local_parking,
+                          size: 14),
+                ),
+              ),
+            Marker(
+              point: points.first,
+              width: 28,
+              height: 28,
+              child: mapPin(const Color(0xFF006A60), Icons.play_arrow),
+            ),
+            Marker(
+              point: points.last,
+              width: 28,
+              height: 28,
+              child: mapPin(AppColors.routeFast, Icons.flag),
+            ),
+            if (picked != null)
+              Marker(
+                point: LatLng(picked.lat!, picked.lng!),
+                width: 18,
+                height: 18,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 3),
+                  ),
+                ),
+              ),
+          ]),
+          mapAttribution(),
+        ],
       ),
-      children: [
-        TileLayer(
-          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-          userAgentPackageName: 'com.ezzat.obd_saga',
-          tileBuilder: dark ? darkModeTileBuilder : null,
-        ),
-        PolylineLayer(polylines: segments),
-        MarkerLayer(markers: [
-          Marker(
-            point: points.first,
-            width: 28,
-            height: 28,
-            child: pin(Color(0xFF006A60), Icons.play_arrow),
-          ),
-          Marker(
-            point: points.last,
-            width: 28,
-            height: 28,
-            child: pin(AppColors.routeFast, Icons.flag),
-          ),
+      // Summary chips.
+      PositionedDirectional(
+        top: 8,
+        start: 8,
+        child: Wrap(spacing: 6, children: [
+          if (speeding > 0)
+            Chip(
+              visualDensity: VisualDensity.compact,
+              avatar: Icon(Icons.speed,
+                  size: 16, color: AppColors.danger(context)),
+              label: Text(tr('$speeding مرة فوق ${App.settings.speedLimit.round()}')),
+            ),
+          if (stops > 0)
+            Chip(
+              visualDensity: VisualDensity.compact,
+              avatar: const Icon(Icons.local_parking, size: 16),
+              label: Text(tr('$stops وقفة')),
+            ),
         ]),
-        SimpleAttributionWidget(
-          source: Text('OpenStreetMap contributors'),
+      ),
+      // Details of the tapped point.
+      if (picked != null)
+        PositionedDirectional(
+          bottom: 24,
+          start: 8,
+          end: 8,
+          child: Card(
+            child: ListTile(
+              dense: true,
+              leading: const Icon(Icons.place),
+              title: Text(
+                  '${fmt(picked.speed)} km/h • ${fmt(picked.rpm)} rpm • ${fmt(picked.coolant)} °C',
+                  textDirection: TextDirection.ltr),
+              subtitle: Text(_time.format(picked.ts)),
+              trailing: IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => setState(() => _picked = null),
+              ),
+            ),
+          ),
         ),
-      ],
-    );
+    ]);
   }
 }
+
+DateFormat get _time => DateFormat('h:mm:ss a', Lang.code);
 
 class _LinePainter extends CustomPainter {
   final List<double> values;
