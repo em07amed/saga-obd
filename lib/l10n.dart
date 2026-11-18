@@ -512,4 +512,8 @@ const Map<String, String> _en = {
   'دوّر على محطة': 'Search stations',
   'دوس ⭐ على أي محطة عشان تتحفظ هنا': 'Tap ⭐ on a station to save it here',
   'ما لقيتش محطات': 'No stations found',
+  'ابدأ في Google Maps': 'Navigate in Google Maps',
+  'كمّل في Google Maps': 'Continue in Google Maps',
+  'افتح Google Maps': 'Open Google Maps',
+  'Google Maps مش متثبت': 'Google Maps is not installed',
 };

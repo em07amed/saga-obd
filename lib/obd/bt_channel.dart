@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 class NowPlaying {
@@ -31,6 +32,25 @@ class BtChannel {
   static const _method = MethodChannel('obd/bt');
   static const _events = EventChannel('obd/bt/events');
   static const disconnectedMarker = '\u0000DISCONNECTED';
+
+  /// True while the app is shown as a floating Picture-in-Picture window.
+  static final pip = ValueNotifier<bool>(false);
+
+  BtChannel() {
+    _method.setMethodCallHandler((call) async {
+      if (call.method == 'pip') pip.value = call.arguments == true;
+    });
+  }
+
+  /// Float over other apps when leaving (only while drive mode is open).
+  Future<void> setPipAllowed(bool v) =>
+      _method.invokeMethod('setPipAllowed', {'allowed': v});
+
+  /// Google Maps navigation to [lat],[lng] (or just Maps when null).
+  Future<bool> openGoogleMaps([double? lat, double? lng]) async =>
+      (await _method.invokeMethod<bool>(
+          'openGoogleMaps', {'lat': lat, 'lng': lng})) ??
+      false;
 
   /// Raw text chunks coming from the adapter (broadcast).
   final Stream<String> data =

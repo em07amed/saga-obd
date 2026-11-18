@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../main.dart';
+import '../obd/bt_channel.dart';
 import '../obd/pids.dart';
 import '../nav/nav_service.dart';
 import 'drive_panels.dart';
@@ -54,6 +55,19 @@ class _DriveModePageState extends State<DriveModePage> {
       }
     }
     if (mounted) setState(() => _searching = false);
+  }
+
+  /// Hand the trip to Google Maps; this app floats on top with the gauges.
+  Future<void> _googleMaps([LatLng? to]) async {
+    App.nav.stop(); // avoid two voices giving directions
+    setState(() => _results = null);
+    final ok = await App.obd.bt
+        .openGoogleMaps(to?.latitude, to?.longitude)
+        .catchError((_) => false);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(tr('Google Maps مش متثبت'))));
+    }
   }
 
   Future<void> _go(Place place) async {
@@ -249,7 +263,10 @@ class _DriveModePageState extends State<DriveModePage> {
                       ? IconButton(
                           icon: const Icon(Icons.close),
                           onPressed: () => setState(() => _results = null))
-                      : null,
+                      : IconButton(
+                          tooltip: tr('افتح Google Maps'),
+                          icon: const Icon(Icons.assistant_navigation),
+                          onPressed: () => _googleMaps()),
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(vertical: 14),
                 ),
@@ -277,6 +294,11 @@ class _DriveModePageState extends State<DriveModePage> {
                           subtitle: Text(r.detail,
                               maxLines: 1, overflow: TextOverflow.ellipsis),
                           onTap: () => _go(r),
+                          trailing: IconButton.filledTonal(
+                            tooltip: tr('ابدأ في Google Maps'),
+                            icon: const Icon(Icons.assistant_navigation),
+                            onPressed: () => _googleMaps(r.at),
+                          ),
                         ),
                     ]),
             ),
@@ -310,6 +332,11 @@ class _DriveModePageState extends State<DriveModePage> {
                       '${NavService.fmtDist(nav.remainingM)} • ${nav.remaining.inMinutes} ${tr('د')}',
                       style: const TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(width: 8),
+                  IconButton(
+                    tooltip: tr('كمّل في Google Maps'),
+                    icon: const Icon(Icons.assistant_navigation),
+                    onPressed: () => _googleMaps(nav.destination!.at),
+                  ),
                   TextButton.icon(
                     onPressed: nav.stop,
                     icon: Icon(Icons.close, color: AppColors.danger(context)),
@@ -347,6 +374,7 @@ class _DriveModePageState extends State<DriveModePage> {
     WakelockPlus.enable(); // screen stays on only in drive mode
     _startGps();
     App.road.start();
+    App.obd.bt.setPipAllowed(true).catchError((_) {});
   }
 
   @override
@@ -356,11 +384,88 @@ class _DriveModePageState extends State<DriveModePage> {
     WakelockPlus.disable();
     _gps?.cancel();
     _search.dispose();
+    App.obd.bt.setPipAllowed(false).catchError((_) {});
     super.dispose();
+  }
+
+  /// Tiny floating window over Google Maps: speed, limit, coolant.
+  Widget _pipView(BuildContext context) {
+    return ListenableBuilder(
+      listenable: Listenable.merge([App.obd, App.road, App.settings]),
+      builder: (context, _) {
+        final v = App.obd.values;
+        final speed = v[Pids.speed];
+        final limit = App.road.effectiveLimit;
+        final over = (speed ?? 0) > limit && App.settings.speedAlertMode != 'off';
+        final coolant = v[Pids.coolant];
+        final hot = coolant != null && coolant >= App.settings.coolantAlert;
+        return Container(
+          color: Colors.black,
+          padding: const EdgeInsets.all(6),
+          child: Row(children: [
+            Expanded(
+              flex: 3,
+              child: FittedBox(
+                child: Text(fmt(speed),
+                    style: TextStyle(
+                        color: over ? const Color(0xFFFF3B30) : Colors.white,
+                        fontWeight: FontWeight.w900,
+                        fontStyle: FontStyle.italic)),
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: FittedBox(
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white,
+                          border: Border.all(
+                              color: const Color(0xFFD32F2F), width: 5),
+                        ),
+                        child: Text('${limit.round()}',
+                            style: const TextStyle(
+                                color: Colors.black,
+                                fontWeight: FontWeight.w900)),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: FittedBox(
+                      child: Text('${fmt(coolant)}°',
+                          style: TextStyle(
+                              color: hot
+                                  ? const Color(0xFFFF3B30)
+                                  : Colors.white70,
+                              fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ]),
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: BtChannel.pip,
+      builder: (context, inPip, _) =>
+          inPip ? _pipView(context) : _fullView(context),
+    );
+  }
+
+  Widget _fullView(BuildContext context) {
     final obd = App.obd;
     final trips = App.trips;
     final s = App.settings;

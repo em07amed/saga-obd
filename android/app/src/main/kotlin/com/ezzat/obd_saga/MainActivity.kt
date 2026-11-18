@@ -58,7 +58,8 @@ class MainActivity : FlutterActivity() {
             }
         })
 
-        MethodChannel(messenger, "obd/bt").setMethodCallHandler { call, result ->
+        channel = MethodChannel(messenger, "obd/bt")
+        channel!!.setMethodCallHandler { call, result ->
             when (call.method) {
                 "isEnabled" -> result.success(adapter()?.isEnabled == true)
                 "bondedDevices" -> bondedDevices(result)
@@ -93,6 +94,15 @@ class MainActivity : FlutterActivity() {
                     result.success(null)
                 }
                 "nowPlaying" -> result.success(nowPlaying())
+                "setPipAllowed" -> {
+                    pipAllowed = call.argument<Boolean>("allowed") ?: false
+                    result.success(null)
+                }
+                "openGoogleMaps" -> {
+                    val lat = call.argument<Double>("lat")
+                    val lng = call.argument<Double>("lng")
+                    result.success(openGoogleMaps(lat, lng))
+                }
                 "mediaControl" -> {
                     mediaControl(call.argument<String>("action") ?: "play_pause")
                     result.success(null)
@@ -243,6 +253,61 @@ class MainActivity : FlutterActivity() {
     }
 
     private var alertId = 100
+
+    // ---- floating window over other apps (Picture-in-Picture) ----
+    private var channel: MethodChannel? = null
+    private var pipAllowed = false
+
+    private fun enterPip(): Boolean {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.O) return false
+        return try {
+            enterPictureInPictureMode(
+                android.app.PictureInPictureParams.Builder()
+                    .setAspectRatio(android.util.Rational(16, 9))
+                    .build()
+            )
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /** Leaving drive mode for another app (Home, Recents): float instead. */
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (pipAllowed) enterPip()
+    }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: android.content.res.Configuration
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        channel?.invokeMethod("pip", isInPictureInPictureMode)
+    }
+
+    /** Google Maps turn-by-turn to a point, or just the app; then float. */
+    private fun openGoogleMaps(lat: Double?, lng: Double?): Boolean {
+        val uri = if (lat != null && lng != null)
+            android.net.Uri.parse("google.navigation:q=$lat,$lng&mode=d")
+        else android.net.Uri.parse("geo:0,0?q=")
+        val intent = Intent(Intent.ACTION_VIEW, uri)
+            .setPackage("com.google.android.apps.maps")
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return try {
+            if (pipAllowed) enterPip()
+            startActivity(intent)
+            true
+        } catch (_: Exception) {
+            // Google Maps missing: any maps app, without guidance.
+            try {
+                startActivity(Intent(Intent.ACTION_VIEW,
+                    if (lat != null && lng != null) android.net.Uri.parse("geo:$lat,$lng?q=$lat,$lng")
+                    else android.net.Uri.parse("geo:0,0?q="))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                true
+            } catch (_: Exception) { false }
+        }
+    }
 
     // ---- spoken alerts (Android TextToSpeech, no plugin needed) ----
     private var tts: android.speech.tts.TextToSpeech? = null
