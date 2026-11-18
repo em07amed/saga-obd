@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:speech_to_text/speech_to_text.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart' show LatLng;
 import 'package:flutter/services.dart';
@@ -35,8 +37,8 @@ class _DriveModePageState extends State<DriveModePage> {
   List<Place>? _results;
   bool _searching = false;
 
-  void _show(_Panel p) {
-    setState(() => _panel = _panel == p ? _Panel.gauges : p);
+  void _show(_Panel p, {bool toggle = false}) {
+    setState(() => _panel = toggle && _panel == p ? _Panel.gauges : p);
     if (p == _Panel.map) _startGps();
   }
 
@@ -55,6 +57,177 @@ class _DriveModePageState extends State<DriveModePage> {
       }
     }
     if (mounted) setState(() => _searching = false);
+  }
+
+  // ---------- voice commands ----------
+
+  final _stt = SpeechToText();
+  bool _listening = false;
+  String _heard = '';
+
+  Future<void> _voice() async {
+    if (_listening) {
+      await _stt.stop();
+      setState(() => _listening = false);
+      return;
+    }
+    final ok = await _stt.initialize(
+      onError: (_) {
+        if (mounted) setState(() => _listening = false);
+      },
+      onStatus: (st) {
+        if ((st == 'done' || st == 'notListening') && mounted) {
+          setState(() => _listening = false);
+        }
+      },
+    );
+    if (!ok) {
+      _say(tr('التعرف على الصوت مش متاح على الموبايل ده'));
+      return;
+    }
+    setState(() {
+      _listening = true;
+      _heard = '';
+    });
+    await _stt.listen(
+      localeId: Lang.isEn ? 'en_US' : 'ar_EG',
+      pauseFor: const Duration(seconds: 3),
+      listenFor: const Duration(seconds: 15),
+      onResult: (r) {
+        if (!mounted) return;
+        setState(() => _heard = r.recognizedWords);
+        if (r.finalResult) {
+          setState(() => _listening = false);
+          _handle(r.recognizedWords);
+        }
+      },
+    );
+  }
+
+  void _say(String s) =>
+      App.obd.bt.speak(s, Lang.code, flush: true).catchError((_) {});
+
+  /// Same length as the input (char-for-char) so indexes map back to it.
+  static String _norm(String s) => s
+      .toLowerCase()
+      .replaceAll(RegExp('[أإآ]'), 'ا')
+      .replaceAll('ة', 'ه')
+      .replaceAll('ى', 'ي');
+
+  static String _clean(String s) => s
+      .trim()
+      .replaceFirst(
+          RegExp(r'^(على|علي|الى|إلى|الي|لـ|ل |to |the )\s*'), '')
+      .trim();
+
+  Future<void> _handle(String raw) async {
+    final t = _norm(raw);
+    bool has(List<String> ws) => ws.any((w) => t.contains(_norm(w)));
+    String after(List<String> ws) {
+      for (final w in ws) {
+        final i = t.indexOf(_norm(w));
+        if (i >= 0) return _clean(raw.substring(i + w.length));
+      }
+      return '';
+    }
+
+    final v = App.obd.values;
+
+    // Stop navigation.
+    if (has(['وقف الملاحه', 'انهي الملاحه', 'الغي الملاحه', 'stop navigation'])) {
+      App.nav.stop();
+      _say(tr('وقفت الملاحة'));
+      return;
+    }
+    // Navigate somewhere.
+    const goWords = ['وديني', 'ودينى', 'خدني', 'عايز اروح', 'روح', 'navigate to', 'take me to', 'go to'];
+    if (has(goWords)) {
+      final dest = after(goWords);
+      if (dest.isEmpty) return _say(tr('قول اسم المكان بعد وديني'));
+      _show(_Panel.map);
+      final p = _pos;
+      try {
+        final r = await App.nav
+            .search(dest, p == null ? null : LatLng(p.latitude, p.longitude));
+        if (r.isEmpty) return _say(tr('ما لقيتش $dest'));
+        _say(tr('رايحين على ${r.first.name}'));
+        await _go(r.first);
+      } catch (_) {
+        _say(tr('البحث محتاج نت'));
+      }
+      return;
+    }
+    // Call someone.
+    const callWords = ['اتصل ب', 'اتصل على', 'كلم', 'call '];
+    if (has(callWords)) {
+      final who = _norm(after(callWords));
+      if (who.isEmpty) return _say(tr('قول الاسم بعد اتصل'));
+      if (!(await Permission.contacts.request()).isGranted) return;
+      final all = await App.obd.bt.contacts().catchError((_) => <Contact>[]);
+      Contact? hit;
+      for (final c in all) {
+        final n = _norm(c.name);
+        if (n == who) {
+          hit = c;
+          break;
+        }
+        if (hit == null && (n.contains(who) || who.contains(n))) hit = c;
+      }
+      if (hit == null) return _say(tr('مش لاقي ${after(callWords)} في الأسماء'));
+      _say(tr('بتصل بـ ${hit.name}'));
+      if ((await Permission.phone.request()).isGranted) {
+        await Future<void>.delayed(const Duration(milliseconds: 1500));
+        await App.obd.bt.call(hit.number).catchError((_) {});
+      }
+      return;
+    }
+    // Radio.
+    if (has(['وقف الراديو', 'اقفل الراديو', 'stop radio', 'stop the radio'])) {
+      await App.radio.stop();
+      return _say(tr('قفلت الراديو'));
+    }
+    const radioWords = ['راديو', 'اذاعه', 'radio'];
+    if (has(radioWords)) {
+      _show(_Panel.radio);
+      final name = after(radioWords);
+      try {
+        final list = name.isNotEmpty
+            ? await App.radio.search(name)
+            : App.radio.favourites.isNotEmpty
+                ? App.radio.favourites
+                : await App.radio.egypt();
+        if (list.isEmpty) return _say(tr('ما لقيتش المحطة'));
+        await App.radio.play(list.first);
+      } catch (_) {
+        _say(tr('الراديو محتاج نت'));
+      }
+      return;
+    }
+    // Readings.
+    if (has(['السرعه', 'سرعتي', 'speed'])) {
+      return _say(tr('سرعتك ${fmt(v[Pids.speed])} كيلو'));
+    }
+    if (has(['الحراره', 'حراره', 'temperature'])) {
+      return _say(tr('حرارة الموتور ${fmt(v[Pids.coolant])} درجة'));
+    }
+    if (has(['البنزين', 'fuel'])) {
+      final l = App.fuel.litresNow;
+      if (l == null) return _say(tr('مش عارف البنزين. سجّل تفويلة الأول'));
+      final avg = App.fuel.realAvgL100 ?? App.trips.avgL100 ?? App.settings.defaultL100;
+      return _say(tr('فاضل ${l.toStringAsFixed(0)} لتر، يكفوا حوالي ${(l / avg * 100).round()} كيلو'));
+    }
+    if (has(['العداد', 'odometer'])) {
+      final km = App.maintenance.odometerKm;
+      return _say(km == null
+          ? tr('العداد مش متسجل')
+          : tr('العداد ${km.round()} كيلو'));
+    }
+    // Panels.
+    if (has(['العدادات', 'gauges'])) return _show(_Panel.gauges);
+    if (has(['الخريطه', 'map'])) return _show(_Panel.map);
+    if (has(['الموسيقي', 'الاغاني', 'music'])) return _show(_Panel.music);
+
+    _say(tr('مش فاهم. جرّب: وديني على مكان، اتصل بحد، شغّل الراديو، أو السرعة كام'));
   }
 
   /// Hand the trip to Google Maps; this app floats on top with the gauges.
@@ -526,7 +699,10 @@ class _DriveModePageState extends State<DriveModePage> {
                       VehicleAvatar(s.vehicle, size: 32),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: Text('${s.vehicle.name} • ${obd.status}',
+                        child: Text(
+                            _listening
+                                ? '🎙️ ${_heard.isEmpty ? tr('بسمعك…') : _heard}'
+                                : '${s.vehicle.name} • ${obd.status}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(color: scheme.onSurfaceVariant)),
@@ -742,7 +918,11 @@ class _DriveModePageState extends State<DriveModePage> {
                   ),
                   // Car-home dock, like a head unit: other apps + media.
                   const SizedBox(height: 8),
-                  _Dock(current: _panel, onPanel: _show),
+                  _Dock(
+                      current: _panel,
+                      onPanel: (p) => _show(p, toggle: true),
+                      onVoice: _voice,
+                      listening: _listening),
                 ],
               ),
             );
@@ -756,7 +936,13 @@ class _DriveModePageState extends State<DriveModePage> {
 class _Dock extends StatelessWidget {
   final _Panel current;
   final void Function(_Panel) onPanel;
-  const _Dock({required this.current, required this.onPanel});
+  final VoidCallback onVoice;
+  final bool listening;
+  const _Dock(
+      {required this.current,
+      required this.onPanel,
+      required this.onVoice,
+      required this.listening});
 
   @override
   Widget build(BuildContext context) {
@@ -764,7 +950,7 @@ class _Dock extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
 
     Widget btn(IconData icon, String label, VoidCallback onTap,
-            {bool active = false}) =>
+            {bool active = false, VoidCallback? onLongPress}) =>
         Expanded(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -777,6 +963,7 @@ class _Dock extends StatelessWidget {
                   HapticFeedback.selectionClick();
                   onTap();
                 },
+                onLongPress: onLongPress,
                 child: SizedBox(
                   height: 56,
                   child: Row(
@@ -817,7 +1004,9 @@ class _Dock extends StatelessWidget {
       btn(Icons.call, tr('مكالمة'), () => onPanel(_Panel.phone),
           active: current == _Panel.phone),
       btn(Icons.play_arrow, '', () => bt.mediaControl('play_pause')),
-      btn(Icons.mic, tr('المساعد'), () => bt.launch('assistant')),
+      // Tap: our voice commands. Long-press: the phone's own assistant.
+      btn(Icons.mic, tr('المساعد'), onVoice,
+          active: listening, onLongPress: () => bt.launch('assistant')),
     ]);
   }
 }

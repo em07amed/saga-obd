@@ -447,7 +447,15 @@ class MainActivity : FlutterActivity() {
             "maps" -> Intent(Intent.ACTION_VIEW, android.net.Uri.parse("geo:0,0?q="))
             "dialer" -> Intent(Intent.ACTION_DIAL)
             "music" -> Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_MUSIC)
-            "assistant" -> Intent(Intent.ACTION_VOICE_COMMAND)
+            "assistant" -> {
+                for (action in listOf(Intent.ACTION_VOICE_COMMAND, "android.intent.action.ASSIST")) {
+                    try {
+                        startActivity(Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                        return true
+                    } catch (_: Exception) {}
+                }
+                return false
+            }
             else -> return false
         }.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         return try {
