@@ -25,7 +25,7 @@ class DriveModePage extends StatefulWidget {
   State<DriveModePage> createState() => _DriveModePageState();
 }
 
-enum _Panel { gauges, map, music, phone }
+enum _Panel { gauges, map, music, radio, phone }
 
 class _DriveModePageState extends State<DriveModePage> {
   _Panel _panel = _Panel.gauges;
@@ -564,6 +564,8 @@ class _DriveModePageState extends State<DriveModePage> {
                               ? _liveMap(context)
                               : _panel == _Panel.music
                                   ? const MusicPanel()
+                                  : _panel == _Panel.radio
+                                      ? const RadioPanel()
                                   : _panel == _Panel.phone
                                       ? const PhonePanel()
                                       : Column(
@@ -705,6 +707,8 @@ class _Dock extends StatelessWidget {
           active: current == _Panel.map),
       btn(Icons.library_music, tr('موسيقى'), () => onPanel(_Panel.music),
           active: current == _Panel.music),
+      btn(Icons.radio, tr('راديو'), () => onPanel(_Panel.radio),
+          active: current == _Panel.radio),
       btn(Icons.call, tr('مكالمة'), () => onPanel(_Panel.phone),
           active: current == _Panel.phone),
       btn(Icons.play_arrow, '', () => bt.mediaControl('play_pause')),

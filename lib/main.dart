@@ -10,6 +10,7 @@ import 'alerts.dart';
 import 'fuel/fuel_log.dart';
 import 'maintenance/maintenance.dart';
 import 'nav/nav_service.dart';
+import 'radio/radio_service.dart';
 import 'road/road_service.dart';
 import 'obd/bt_channel.dart';
 import 'obd/obd_service.dart';
@@ -35,6 +36,7 @@ class App {
   static late final AlertService alerts;
   static late final NavService nav;
   static late final RoadService road;
+  static late final RadioService radio;
 }
 
 Future<void> main() async {
@@ -54,6 +56,8 @@ Future<void> main() async {
   await App.fuel.load();
   App.nav = NavService(App.obd.bt);
   App.road = RoadService(App.obd.bt, App.settings, App.obd);
+  App.radio = RadioService();
+  await App.radio.init();
   App.alerts = AlertService(
       App.obd, App.settings, App.maintenance, App.obd.bt, App.road);
   runApp(CarObdApp());

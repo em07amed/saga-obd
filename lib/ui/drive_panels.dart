@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../l10n.dart';
 import '../main.dart';
 import '../obd/bt_channel.dart';
+import '../radio/radio_service.dart';
 
 /// Now playing from any music app, with controls, inside drive mode.
 class MusicPanel extends StatefulWidget {
@@ -262,6 +263,190 @@ class _PhonePanelState extends State<PhonePanel> {
             onPressed: () => _call(c),
           ),
           onTap: () => _call(c),
+        );
+      },
+    );
+  }
+}
+
+/// Internet radio: Egyptian stations, search, favourites, now playing.
+class RadioPanel extends StatefulWidget {
+  const RadioPanel({super.key});
+
+  @override
+  State<RadioPanel> createState() => _RadioPanelState();
+}
+
+class _RadioPanelState extends State<RadioPanel> {
+  List<Station>? _list;
+  String? _err;
+  bool _favsOnly = false;
+  final _q = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load([String? q]) async {
+    setState(() {
+      _list = null;
+      _err = null;
+    });
+    try {
+      final r = q == null || q.trim().isEmpty
+          ? await App.radio.egypt()
+          : await App.radio.search(q.trim());
+      if (mounted) setState(() => _list = r);
+    } catch (_) {
+      if (mounted) setState(() => _err = tr('الراديو محتاج نت'));
+    }
+  }
+
+  @override
+  void dispose() {
+    _q.dispose();
+    super.dispose();
+  }
+
+  Widget _logo(Station s, double size) => ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: s.favicon.startsWith('http')
+            ? Image.network(s.favicon,
+                width: size,
+                height: size,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) =>
+                    Icon(Icons.radio, size: size * 0.8))
+            : Icon(Icons.radio, size: size * 0.8),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final r = App.radio;
+    final scheme = Theme.of(context).colorScheme;
+    return ListenableBuilder(
+      listenable: r,
+      builder: (context, _) {
+        final items = _favsOnly ? r.favourites : (_list ?? const <Station>[]);
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Column(children: [
+              // Now playing.
+              if (r.current != null)
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: scheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(children: [
+                    _logo(r.current!, 44),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(r.current!.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 16)),
+                          Text(
+                              r.error != null
+                                  ? tr(r.error!)
+                                  : r.loading
+                                      ? tr('بيوصل…')
+                                      : r.playing
+                                          ? tr('شغال')
+                                          : tr('واقف'),
+                              style: TextStyle(color: scheme.onSurfaceVariant)),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: tr('مفضلة'),
+                      icon: Icon(r.isFav(r.current!)
+                          ? Icons.star
+                          : Icons.star_border),
+                      onPressed: () => r.toggleFav(r.current!),
+                    ),
+                    IconButton.filled(
+                      iconSize: 36,
+                      onPressed: r.loading ? null : r.toggle,
+                      icon: Icon(r.playing ? Icons.stop : Icons.play_arrow),
+                    ),
+                  ]),
+                ),
+              Row(children: [
+                Expanded(
+                  child: TextField(
+                    controller: _q,
+                    textInputAction: TextInputAction.search,
+                    onSubmitted: (v) {
+                      setState(() => _favsOnly = false);
+                      _load(v);
+                    },
+                    decoration: InputDecoration(
+                      isDense: true,
+                      prefixIcon: const Icon(Icons.search),
+                      hintText: tr('دوّر على محطة'),
+                      border: const OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilterChip(
+                  label: Text(tr('المفضلة')),
+                  avatar: const Icon(Icons.star, size: 16),
+                  selected: _favsOnly,
+                  onSelected: (v) => setState(() => _favsOnly = v),
+                ),
+              ]),
+              const SizedBox(height: 6),
+              Expanded(
+                child: _err != null && !_favsOnly
+                    ? Center(child: Text(_err!))
+                    : _list == null && !_favsOnly
+                        ? const Center(child: CircularProgressIndicator())
+                        : items.isEmpty
+                            ? Center(
+                                child: Text(_favsOnly
+                                    ? tr('دوس ⭐ على أي محطة عشان تتحفظ هنا')
+                                    : tr('ما لقيتش محطات')))
+                            : ListView.builder(
+                                itemCount: items.length,
+                                itemBuilder: (context, i) {
+                                  final s = items[i];
+                                  final on = r.current?.id == s.id;
+                                  return ListTile(
+                                    dense: true,
+                                    selected: on,
+                                    leading: _logo(s, 36),
+                                    title: Text(s.name,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis),
+                                    subtitle: s.tags.isEmpty
+                                        ? null
+                                        : Text(s.tags,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis),
+                                    trailing: IconButton(
+                                      icon: Icon(r.isFav(s)
+                                          ? Icons.star
+                                          : Icons.star_border),
+                                      onPressed: () => r.toggleFav(s),
+                                    ),
+                                    onTap: () => r.play(s),
+                                  );
+                                },
+                              ),
+              ),
+            ]),
+          ),
         );
       },
     );

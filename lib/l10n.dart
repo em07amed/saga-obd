@@ -500,4 +500,16 @@ const Map<String, String> _en = {
   'قبل الرادار بـ 600 متر، والبيانات ممكن تكون ناقصة':
       '600 m before a camera; data may be incomplete',
   'اختار أو اكتب': 'Pick or type',
+  // ---- radio ----
+  'راديو': 'Radio',
+  'الراديو محتاج نت': 'Radio needs internet',
+  'المحطة دي مش شغالة دلوقتي': 'This station is not available now',
+  'بيوصل…': 'Connecting…',
+  'شغال': 'Playing',
+  'واقف': 'Stopped',
+  'مفضلة': 'Favourite',
+  'المفضلة': 'Favourites',
+  'دوّر على محطة': 'Search stations',
+  'دوس ⭐ على أي محطة عشان تتحفظ هنا': 'Tap ⭐ on a station to save it here',
+  'ما لقيتش محطات': 'No stations found',
 };
