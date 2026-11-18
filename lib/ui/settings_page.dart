@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../backup.dart';
 import '../main.dart';
 import '../obd/bt_channel.dart';
 import '../settings.dart';
@@ -251,6 +252,26 @@ class SettingsPage extends StatelessWidget {
               unit: tr('ج.م'),
               value: s.fuelPrice,
               help: tr('السعر الرسمي بيتحط تلقائي لما تختار النوع. لو اتغير عدّله من هنا؛ كل رحلة بتتسجل بالسعر وقت بدايتها.')),
+          _Header(tr('النسخة الاحتياطية')),
+          ListTile(
+            leading: Icon(Icons.backup_outlined),
+            title: Text(tr('اعمل نسخة احتياطية')),
+            subtitle: Text(tr('العربيات والرحلات والصيانة والبنزين والإعدادات في ملف واحد. احفظه على Drive أو ابعته لنفسك.')),
+            onTap: () => Backup.export(App.db).catchError((_) {}),
+          ),
+          ListTile(
+            leading: Icon(Icons.restore),
+            title: Text(tr('استرجع من نسخة احتياطية')),
+            subtitle: Text(tr('هيستبدل البيانات الحالية باللي في الملف')),
+            onTap: () async {
+              final ok = await Backup.import(App.db);
+              if (ok == null || !context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text(ok
+                      ? tr('اترجعت. اقفل التطبيق وافتحه تاني.')
+                      : tr('الملف ده مش نسخة احتياطية من Car OBD'))));
+            },
+          ),
           SizedBox(height: 24),
         ],
       ),

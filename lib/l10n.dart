@@ -516,4 +516,13 @@ const Map<String, String> _en = {
   'كمّل في Google Maps': 'Continue in Google Maps',
   'افتح Google Maps': 'Open Google Maps',
   'Google Maps مش متثبت': 'Google Maps is not installed',
+  // ---- backup ----
+  'النسخة الاحتياطية': 'Backup',
+  'اعمل نسخة احتياطية': 'Create backup',
+  'العربيات والرحلات والصيانة والبنزين والإعدادات في ملف واحد. احفظه على Drive أو ابعته لنفسك.':
+      'Vehicles, trips, maintenance, fuel and settings in one file. Save it to Drive or send it to yourself.',
+  'استرجع من نسخة احتياطية': 'Restore from backup',
+  'هيستبدل البيانات الحالية باللي في الملف': 'Replaces current data with the file contents',
+  'اترجعت. اقفل التطبيق وافتحه تاني.': 'Restored. Close and reopen the app.',
+  'الملف ده مش نسخة احتياطية من Car OBD': 'This file is not a Car OBD backup',
 };
