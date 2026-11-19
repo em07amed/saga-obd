@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:latlong2/latlong.dart' show LatLng, Distance, LengthUnit;
 
 import '../l10n.dart';
@@ -14,19 +15,35 @@ import '../obd/pids.dart';
 import '../settings.dart';
 
 class SpeedCamera {
-  final int id;
+  final int id; // OSM node id, or negative for cameras the driver added
   final LatLng at;
   final double? limit;
+  /// Direction of travel the camera watches (degrees), if known.
+  final double? heading;
   bool farSaid = false;
   bool nearSaid = false;
-  SpeedCamera(this.id, this.at, this.limit);
+  SpeedCamera(this.id, this.at, this.limit, {this.heading});
+  bool get mine => id < 0;
+
+  Map<String, dynamic> toJson() => {
+        'id': id, 'lat': at.latitude, 'lon': at.longitude,
+        'limit': limit, 'heading': heading,
+      };
+  static SpeedCamera fromJson(Map<String, dynamic> m) => SpeedCamera(
+        (m['id'] as num).toInt(),
+        LatLng((m['lat'] as num).toDouble(), (m['lon'] as num).toDouble()),
+        (m['limit'] as num?)?.toDouble(),
+        heading: (m['heading'] as num?)?.toDouble(),
+      );
 }
 
 class _Road {
+  final int id;
   final List<LatLng> pts;
-  final double limit;
+  final double? fwd, back; // limit each way (null = unknown)
+  final bool oneway;
   final String name;
-  const _Road(this.pts, this.limit, this.name);
+  const _Road(this.id, this.pts, this.fwd, this.back, this.oneway, this.name);
 }
 
 /// Road speed limits and speed cameras from OpenStreetMap (Overpass API).
@@ -48,10 +65,102 @@ class RoadService extends ChangeNotifier {
   DateTime _fetchedTime = DateTime.fromMillisecondsSinceEpoch(0);
   bool _fetching = false;
 
-  /// Limit of the road under the car, if OSM knows it.
+  /// Limit of the road under the car, if OSM (or the driver) knows it.
   double? roadLimit;
   String? roadName;
+  int? roadId;
   DateTime? _roadSeen;
+  int? _candidate; // a different road must win twice before we switch
+  double _heading = double.nan;
+
+  /// Driver's own corrections: road limits, added and hidden cameras.
+  Map<int, double> _limitFix = {};
+  List<SpeedCamera> _myCams = [];
+  Set<int> _hidden = {};
+  List<SpeedCamera> _osmCams = [];
+  SharedPreferences? _p;
+  LatLng? _last;
+
+  Future<void> _loadFixes() async {
+    final p = _p ??= await SharedPreferences.getInstance();
+    try {
+      final m = jsonDecode(p.getString('roadLimitFix') ?? '{}') as Map;
+      _limitFix = {
+        for (final e in m.entries)
+          int.parse(e.key as String): (e.value as num).toDouble()
+      };
+      _myCams = [
+        for (final c in jsonDecode(p.getString('myCameras') ?? '[]') as List)
+          SpeedCamera.fromJson(Map<String, dynamic>.from(c as Map))
+      ];
+      _hidden = {
+        for (final i in jsonDecode(p.getString('hiddenCameras') ?? '[]') as List)
+          (i as num).toInt()
+      };
+    } catch (_) {}
+    _mergeCams();
+  }
+
+  Future<void> _saveFixes() async {
+    final p = _p ??= await SharedPreferences.getInstance();
+    await p.setString('roadLimitFix',
+        jsonEncode({for (final e in _limitFix.entries) '${e.key}': e.value}));
+    await p.setString(
+        'myCameras', jsonEncode([for (final c in _myCams) c.toJson()]));
+    await p.setString('hiddenCameras', jsonEncode(_hidden.toList()));
+  }
+
+  void _mergeCams() {
+    final old = {for (final c in cameras) c.id: c};
+    cameras = [
+      for (final c in [..._osmCams, ..._myCams])
+        if (!_hidden.contains(c.id)) old[c.id] ?? c
+    ];
+  }
+
+  /// Correct the limit of the road the car is on (saved on this phone).
+  Future<bool> setLimitForThisRoad(double? limit) async {
+    final id = roadId;
+    if (id == null) return false;
+    if (limit == null) {
+      _limitFix.remove(id);
+    } else {
+      _limitFix[id] = limit;
+    }
+    await _saveFixes();
+    if (_last != null) _matchRoad(_last!, force: true);
+    notifyListeners();
+    return true;
+  }
+
+  bool get thisRoadFixed => roadId != null && _limitFix.containsKey(roadId);
+
+  /// "There's a radar here" — saved at the car's position and direction.
+  Future<void> addCameraHere() async {
+    final at = _last;
+    if (at == null) return;
+    _myCams.add(SpeedCamera(-DateTime.now().millisecondsSinceEpoch, at, null,
+        heading: _heading.isNaN ? null : _heading));
+    await _saveFixes();
+    _mergeCams();
+    notifyListeners();
+  }
+
+  /// "No radar here" — hides an OSM camera or deletes one the driver added.
+  Future<void> removeCamera(SpeedCamera c) async {
+    if (c.mine) {
+      _myCams.removeWhere((m) => m.id == c.id);
+    } else {
+      _hidden.add(c.id);
+    }
+    await _saveFixes();
+    _mergeCams();
+    if (nextCamera?.id == c.id) {
+      nextCamera = null;
+      nextCameraM = null;
+    }
+    notifyListeners();
+  }
 
   SpeedCamera? nextCamera;
   double? nextCameraM;
@@ -65,6 +174,7 @@ class RoadService extends ChangeNotifier {
 
   Future<void> start() async {
     if (_gps != null) return;
+    await _loadFixes();
     final perm = await Geolocator.checkPermission();
     if (perm == LocationPermission.denied ||
         perm == LocationPermission.deniedForever) {
@@ -88,14 +198,16 @@ class RoadService extends ChangeNotifier {
 
   void _onFix(Position p) {
     final at = LatLng(p.latitude, p.longitude);
+    _last = at;
+    if (p.speed > 2 && !p.heading.isNaN) _heading = p.heading;
     final f = _fetchedAt;
     if (f == null ||
-        _m(f, at) > 1200 ||
+        _m(f, at) > 600 ||
         DateTime.now().difference(_fetchedTime) > const Duration(minutes: 15)) {
       _fetch(at);
     }
     _matchRoad(at);
-    _checkCameras(at, p.heading, p.speed * 3.6);
+    _checkCameras(at, _heading, p.speed * 3.6);
     notifyListeners();
   }
 
@@ -106,7 +218,9 @@ class RoadService extends ChangeNotifier {
     _fetching = true;
     try {
       final q = '[out:json][timeout:25];('
-          'way(around:2000,${at.latitude},${at.longitude})["highway"]["maxspeed"];'
+          // All drivable roads, so a nearby tagged side street can't steal
+          // the match from the unknown road we're actually on.
+          'way(around:1000,${at.latitude},${at.longitude})["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|service)(_link)?\$"];'
           'node(around:4000,${at.latitude},${at.longitude})["highway"="speed_camera"];'
           ');out geom tags;';
       final res = await http.post(
@@ -126,19 +240,29 @@ class RoadService extends ChangeNotifier {
             e['id'] as int,
             LatLng((e['lat'] as num).toDouble(), (e['lon'] as num).toDouble()),
             parseMaxspeed(tags['maxspeed'] as String?),
+            heading: double.tryParse('${tags['direction'] ?? tags['camera:direction'] ?? ''}'),
           ));
         } else if (e['type'] == 'way' && e['geometry'] != null) {
-          final lim = parseMaxspeed(tags['maxspeed'] as String?);
-          if (lim == null) continue;
-          roads.add(_Road([
-            for (final g in e['geometry'] as List)
-              LatLng((g['lat'] as num).toDouble(), (g['lon'] as num).toDouble()),
-          ], lim, (tags['name:${Lang.code}'] ?? tags['name'] ?? '') as String));
+          final all = parseMaxspeed(tags['maxspeed'] as String?);
+          final ow = tags['oneway'] == 'yes' ||
+              tags['junction'] == 'roundabout' ||
+              '${tags['highway']}' == 'motorway';
+          roads.add(_Road(
+            e['id'] as int,
+            [
+              for (final g in e['geometry'] as List)
+                LatLng((g['lat'] as num).toDouble(), (g['lon'] as num).toDouble()),
+            ],
+            parseMaxspeed(tags['maxspeed:forward'] as String?) ?? all,
+            parseMaxspeed(tags['maxspeed:backward'] as String?) ?? all,
+            ow,
+            (tags['name:${Lang.code}'] ?? tags['name'] ?? '') as String,
+          ));
         }
       }
       // Keep camera "already announced" state across refreshes.
-      final old = {for (final c in cameras) c.id: c};
-      cameras = [for (final c in cams) old[c.id] ?? c];
+      _osmCams = cams;
+      _mergeCams();
       _roads = roads;
       _fetchedAt = at;
       _fetchedTime = DateTime.now();
@@ -160,20 +284,46 @@ class RoadService extends ChangeNotifier {
 
   // ---------- matching ----------
 
-  void _matchRoad(LatLng at) {
+  /// Picks the road under the car: close to the centre line AND pointing the
+  /// way we drive (so a parallel service road or a bridge above doesn't win),
+  /// and only switches after the new road wins twice in a row.
+  void _matchRoad(LatLng at, {bool force = false}) {
+    final hasDir = !_heading.isNaN;
     _Road? best;
-    var bestM = 25.0; // must be within 25 m of the road centre line
+    var bestScore = double.infinity;
+    var bestFwd = true;
     for (final r in _roads) {
       for (var i = 1; i < r.pts.length; i++) {
         final d = _toSegment(at, r.pts[i - 1], r.pts[i]);
-        if (d < bestM) {
-          bestM = d;
+        if (d > 22) continue;
+        var score = d;
+        var fwd = true;
+        if (hasDir) {
+          final seg = _bearing(r.pts[i - 1], r.pts[i]);
+          final diff = (((_heading - seg) + 540) % 360 - 180).abs();
+          fwd = diff <= 90;
+          final off = fwd ? diff : 180 - diff;
+          if (off > 35) continue; // crossing road, not ours
+          if (r.oneway && !fwd) continue; // wrong way on a one-way
+          score += off * 0.4;
+        }
+        if (score < bestScore) {
+          bestScore = score;
           best = r;
+          bestFwd = fwd;
         }
       }
     }
     if (best != null) {
-      roadLimit = best.limit;
+      if (!force && roadId != null && best.id != roadId) {
+        if (_candidate != best.id) {
+          _candidate = best.id; // wait for one more fix to confirm
+          return;
+        }
+      }
+      _candidate = null;
+      roadId = best.id;
+      roadLimit = _limitFix[best.id] ?? (bestFwd ? best.fwd : best.back);
       roadName = best.name;
       _roadSeen = DateTime.now();
     } else if (_roadSeen == null ||
@@ -181,6 +331,7 @@ class RoadService extends ChangeNotifier {
       // Lost the road for a while: fall back to the manual limit.
       roadLimit = null;
       roadName = null;
+      roadId = null;
     }
   }
 
@@ -200,10 +351,19 @@ class RoadService extends ChangeNotifier {
         c.nearSaid = false;
         continue;
       }
-      // Only cameras roughly ahead of the direction of travel.
+      // Only cameras on the line we're driving: ahead of us and at most
+      // ~35 m to the side (a cone alone catches parallel streets).
       if (moving) {
         final diff = ((_bearing(at, c.at) - heading + 540) % 360) - 180;
-        if (diff.abs() > 45) continue;
+        if (diff.abs() > 60) continue;
+        final side = d * math.sin(diff.abs() * math.pi / 180);
+        if (side > 35) continue;
+        // A camera that watches the other direction isn't ours.
+        final ch = c.heading;
+        if (ch != null) {
+          final o = ((ch - heading + 540) % 360) - 180;
+          if (o.abs() > 60) continue;
+        }
       }
       if (d < bestM) {
         bestM = d;

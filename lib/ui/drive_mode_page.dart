@@ -569,7 +569,9 @@ class _DriveModePageState extends State<DriveModePage> {
                 ),
                 if (s.speedAlertMode != 'off') ...[
                   const SizedBox(width: 6),
-                  Container(
+                  GestureDetector(
+                    onTap: () => _fixRoadLimit(context),
+                    child: Container(
                     width: 46,
                     height: 46,
                     alignment: Alignment.center,
@@ -588,10 +590,57 @@ class _DriveModePageState extends State<DriveModePage> {
                             fontSize: 16,
                             fontWeight: FontWeight.w900)),
                   ),
+                  ),
                 ],
               ],
             ),
           ),
+        // Radar ahead: distance, with "no radar here" to remove a wrong one.
+        if (App.road.nextCamera != null &&
+            (App.road.nextCameraM ?? 9999) <= 1000)
+          PositionedDirectional(
+            top: nav.active ? 96 : 64,
+            start: 8,
+            child: Material(
+              color: const Color(0xFFD32F2F),
+              borderRadius: BorderRadius.circular(22),
+              elevation: 4,
+              child: Padding(
+                padding: const EdgeInsetsDirectional.fromSTEB(12, 2, 2, 2),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.camera_alt, color: Colors.white, size: 18),
+                  const SizedBox(width: 6),
+                  Text(
+                      tr('رادار ${(App.road.nextCameraM! / 10).round() * 10} متر'),
+                      style: const TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.bold)),
+                  TextButton(
+                    onPressed: () =>
+                        App.road.removeCamera(App.road.nextCamera!),
+                    child: Text(tr('مش رادار'),
+                        style: const TextStyle(color: Colors.white70)),
+                  ),
+                ]),
+              ),
+            ),
+          ),
+        // Report a radar at this spot (saved on the phone).
+        PositionedDirectional(
+          end: 10,
+          bottom: (nav.active ? 86 : 14) + (_follow ? 0 : 60),
+          child: FloatingActionButton.small(
+            heroTag: 'addCam',
+            backgroundColor: Colors.white,
+            tooltip: tr('فيه رادار هنا'),
+            onPressed: () async {
+              await App.road.addCameraHere();
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text(tr('اتسجّل رادار في المكان ده'))));
+            },
+            child: const Icon(Icons.add_a_photo, color: Color(0xFFD32F2F)),
+          ),
+        ),
         if (!_follow)
           PositionedDirectional(
             end: 10,
@@ -654,6 +703,42 @@ class _DriveModePageState extends State<DriveModePage> {
           ),
       ]),
     );
+  }
+
+  /// Tap on the limit sign: correct the limit of the road we're on.
+  Future<void> _fixRoadLimit(BuildContext context) async {
+    final road = App.road;
+    if (road.roadId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(tr('مش عارف انت على أنهي طريق دلوقتي'))));
+      return;
+    }
+    final picked = await showDialog<double>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('حد السرعة للطريق ده')),
+        content: Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final v in const [40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0, 120.0])
+            ChoiceChip(
+              label: Text('${v.round()}'),
+              selected: road.roadLimit == v,
+              onSelected: (_) => Navigator.pop(ctx, v),
+            ),
+        ]),
+        actions: [
+          if (road.thisRoadFixed)
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, -1.0),
+                child: Text(tr('رجّع الأصلي'))),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(tr('إلغاء'))),
+        ],
+      ),
+    );
+    if (picked == null) return;
+    await road.setLimitForThisRoad(picked < 0 ? null : picked);
+    if (mounted) setState(() {});
   }
 
   static String _clock(DateTime t) =>

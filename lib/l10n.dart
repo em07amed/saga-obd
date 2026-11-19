@@ -559,4 +559,10 @@ const Map<String, String> _en = {
   'الشمال لفوق': 'North up',
   'اتجاه السير لفوق': 'Heading up',
   'رجّع الخريطة': 'Recenter',
+  'مش رادار': "Not a radar",
+  'فيه رادار هنا': "Radar here",
+  'اتسجّل رادار في المكان ده': "Radar saved at this spot",
+  'مش عارف انت على أنهي طريق دلوقتي': "Don't know which road you're on yet",
+  'حد السرعة للطريق ده': "Speed limit for this road",
+  'رجّع الأصلي': "Reset",
 };

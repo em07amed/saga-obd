@@ -491,13 +491,47 @@ class MainActivity : FlutterActivity() {
     }
 
     /** Two short warning beeps, no words. */
+    /** Short double beep, routed like the voice (navigation audio), so it
+     *  plays through the car's Bluetooth speakers and ducks the music. */
     private fun beep() {
-        try {
-            val tg = android.media.ToneGenerator(android.media.AudioManager.STREAM_ALARM, 100)
-            tg.startTone(android.media.ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 600)
-            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ tg.release() }, 900)
-        } catch (_: Exception) {
-        }
+        Thread {
+            try {
+                val rate = 22050
+                val tone = { hz: Double, ms: Int ->
+                    ShortArray(rate * ms / 1000) { i ->
+                        val env = minOf(1.0, minOf(i, rate * ms / 1000 - i) / (rate * 0.01))
+                        (Math.sin(2 * Math.PI * hz * i / rate) * 0.8 * env * Short.MAX_VALUE).toInt().toShort()
+                    }
+                }
+                val gap = ShortArray(rate * 80 / 1000)
+                val pcm = tone(1400.0, 180) + gap + tone(1400.0, 180)
+                val attrs = android.media.AudioAttributes.Builder()
+                    .setUsage(android.media.AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+                val am = audio()
+                val focus = if (android.os.Build.VERSION.SDK_INT >= 26)
+                    android.media.AudioFocusRequest.Builder(
+                        android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+                        .setAudioAttributes(attrs).build() else null
+                if (android.os.Build.VERSION.SDK_INT >= 26 && focus != null) am.requestAudioFocus(focus)
+                val track = android.media.AudioTrack.Builder()
+                    .setAudioAttributes(attrs)
+                    .setAudioFormat(android.media.AudioFormat.Builder()
+                        .setSampleRate(rate)
+                        .setEncoding(android.media.AudioFormat.ENCODING_PCM_16BIT)
+                        .setChannelMask(android.media.AudioFormat.CHANNEL_OUT_MONO)
+                        .build())
+                    .setBufferSizeInBytes(pcm.size * 2)
+                    .setTransferMode(android.media.AudioTrack.MODE_STATIC)
+                    .build()
+                track.write(pcm, 0, pcm.size)
+                track.play()
+                Thread.sleep((pcm.size * 1000L / rate) + 150)
+                track.release()
+                if (android.os.Build.VERSION.SDK_INT >= 26 && focus != null) am.abandonAudioFocusRequest(focus)
+            } catch (_: Exception) {}
+        }.start()
     }
 
     private fun say(text: String, lang: String) {
