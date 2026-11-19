@@ -7,6 +7,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import 'alerts.dart';
+import 'obd/pids.dart';
 import 'fuel/fuel_log.dart';
 import 'maintenance/maintenance.dart';
 import 'nav/nav_service.dart';
@@ -63,7 +64,51 @@ Future<void> main() async {
   await App.radio.init();
   App.alerts = AlertService(
       App.obd, App.settings, App.maintenance, App.obd.bt, App.road);
+  // Feed the Android Auto screen every 2 s.
+  Timer.periodic(const Duration(seconds: 2), (_) => _pushToCar());
   runApp(CarObdApp());
+}
+
+void _pushToCar() {
+  final o = App.obd;
+  final v = o.values;
+  String n(double? x, [int d = 0]) => x == null ? '--' : x.toStringAsFixed(d);
+  final coolant = v[Pids.coolant];
+  final litres = App.fuel.litresNow;
+  final avg = App.fuel.realAvgL100 ?? App.settings.defaultL100;
+  final odo = App.maintenance.odometerKm;
+  final limit = App.road.effectiveLimit;
+  final speed = v[Pids.speed];
+  App.obd.bt.carUpdate({
+    'title': '${App.settings.vehicle.name} • ${o.status}',
+    'waiting': tr('افتح Car OBD على الموبايل واتصل بالعربية'),
+    'rows': [
+      {
+        'title': tr('السرعة ${n(speed)} كم/س'),
+        'text': tr('الحد ${limit.round()} • RPM ${n(v[Pids.rpm])}'),
+        'warn': speed != null && speed > limit,
+      },
+      {
+        'title': tr('حرارة الموتور ${n(coolant)}°C'),
+        'text': '',
+        'warn': coolant != null && coolant >= App.settings.coolantAlert,
+      },
+      {
+        'title': tr('البنزين ${n(litres)} لتر'),
+        'text': litres == null
+            ? tr('سجّل تفويلة عشان نحسب الباقي')
+            : tr('يكفي حوالي ${(litres / avg * 100).round()} كم'),
+        'warn': litres != null && litres < 6,
+      },
+      {
+        'title': tr('العداد ${n(odo)} كم'),
+        'text': App.road.nextCameraM != null && App.road.nextCameraM! < 1000
+            ? tr('رادار بعد ${App.road.nextCameraM!.round()} متر')
+            : '',
+        'warn': false,
+      },
+    ],
+  }).catchError((_) {});
 }
 
 class CarObdApp extends StatelessWidget {

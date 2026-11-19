@@ -151,6 +151,18 @@ class MainActivity : FlutterActivity() {
                     result.success(audio().isMicrophoneMute)
                 }
                 "callCurrent" -> result.success(callInfo())
+                "carUpdate" -> {
+                    CarData.title = call.argument<String>("title") ?: "Car OBD"
+                    CarData.waiting = call.argument<String>("waiting") ?: CarData.waiting
+                    @Suppress("UNCHECKED_CAST")
+                    CarData.rows = (call.argument<List<Map<String, Any?>>>("rows")) ?: emptyList()
+                    CarData.updatedAt = System.currentTimeMillis()
+                    result.success(null)
+                }
+                "carToast" -> {
+                    CarData.toast?.invoke(call.argument<String>("text") ?: "")
+                    result.success(null)
+                }
                 "listen" -> listen(call.argument<String>("lang") ?: "ar-EG", result)
                 "callerIdRole" -> result.success(requestCallerIdRole())
                 "mediaKey" -> {

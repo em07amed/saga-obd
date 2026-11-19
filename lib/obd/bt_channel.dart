@@ -161,6 +161,12 @@ class BtChannel {
   Future<String?> listen(String lang) =>
       _method.invokeMethod<String>('listen', {'lang': lang});
 
+  /// Readings for the Android Auto screen (car display).
+  Future<void> carUpdate(Map<String, dynamic> data) =>
+      _method.invokeMethod('carUpdate', data);
+  Future<void> carToast(String text) =>
+      _method.invokeMethod('carToast', {'text': text});
+
   Future<void> call(String number) =>
       _method.invokeMethod('call', {'number': number});
 
