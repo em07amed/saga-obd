@@ -17,6 +17,7 @@ import 'obd/obd_service.dart';
 import 'settings.dart';
 import 'trips/trip_db.dart';
 import 'trips/trip_recorder.dart';
+import 'ui/map_tiles.dart';
 import 'ui/call_overlay.dart';
 import 'ui/dashboard_page.dart';
 import 'ui/maintenance_page.dart';
@@ -48,6 +49,7 @@ Future<void> main() async {
   await App.db.open();
   App.settings = AppSettings();
   await App.settings.load(App.db);
+  await loadMapStyle();
   App.obd = ObdService(BtChannel(), App.settings);
   App.trips = TripRecorder(App.obd, App.db, App.settings);
   App.maintenance =

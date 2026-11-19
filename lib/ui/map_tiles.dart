@@ -1,3 +1,4 @@
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 
@@ -32,14 +33,29 @@ const mapStyles = [
 /// Index into [mapStyles] currently shown; changes on failure or by choice.
 final mapStyleIndex = ValueNotifier<int>(0);
 int _errors = 0, _tried = 1;
+bool _manual = false; // the driver picked a style: never switch it for them
 
 void setMapStyle(String id) {
   final i = mapStyles.indexWhere((m) => m.id == id);
   if (i >= 0) {
-    _errors = 0;
-    _tried = 1;
+    _manual = true;
     mapStyleIndex.value = i;
+    SharedPreferences.getInstance()
+        .then((p) => p.setString('mapStyle', id))
+        .catchError((_) => false);
   }
+}
+
+/// Restores the style the driver picked last time (call once at start-up).
+Future<void> loadMapStyle() async {
+  try {
+    final id = (await SharedPreferences.getInstance()).getString('mapStyle');
+    final i = mapStyles.indexWhere((m) => m.id == id);
+    if (i >= 0) {
+      _manual = true;
+      mapStyleIndex.value = i;
+    }
+  } catch (_) {}
 }
 
 /// The base map. In dark/sport themes the tiles are darkened on the device
@@ -58,8 +74,10 @@ Widget mapTiles(BuildContext context) {
         maxNativeZoom: m.maxZoom,
         tileBuilder: dark && m.id != 'sat' ? darkModeTileBuilder : null,
         errorTileCallback: (tile, error, stack) {
-          // Several failures in a row → try the next source (once each).
-          if (++_errors >= 6 && _tried < mapStyles.length - 1) {
+          // Default source failing a lot → try the next one (once each).
+          // Never overrides a style the driver chose.
+          if (_manual) return;
+          if (++_errors >= 12 && _tried < mapStyles.length - 1) {
             _errors = 0;
             _tried++;
             WidgetsBinding.instance.addPostFrameCallback((_) {
