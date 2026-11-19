@@ -565,4 +565,9 @@ const Map<String, String> _en = {
   'مش عارف انت على أنهي طريق دلوقتي': "Don't know which road you're on yet",
   'حد السرعة للطريق ده': "Speed limit for this road",
   'رجّع الأصلي': "Reset",
+  'شكل الخريطة': 'Map style',
+  'شوارع (Esri)': 'Streets (Esri)',
+  'OpenStreetMap (عربي)': 'OpenStreetMap (Arabic)',
+  'OSM ملوّنة': 'OSM colourful',
+  'قمر صناعي (Esri)': 'Satellite (Esri)',
 };

@@ -56,7 +56,7 @@ class RoadService extends ChangeNotifier {
   RoadService(this.bt, this.settings, this.obd);
 
   static const _dist = Distance();
-  static const _ua = {'User-Agent': 'CarOBD/1.0 (personal OBD dashboard)'};
+  static const _ua = {'User-Agent': 'CarOBD/1.0 (+https://github.com/em07amed/saga-obd)'};
 
   StreamSubscription<Position>? _gps;
   List<_Road> _roads = [];

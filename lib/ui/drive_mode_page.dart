@@ -489,6 +489,24 @@ class _DriveModePageState extends State<DriveModePage> {
             ),
           ),
         ),
+        // Map style (streets / OSM / colourful / satellite).
+        PositionedDirectional(
+          top: 64,
+          end: 8,
+          child: PopupMenuButton<int>(
+            tooltip: tr('شكل الخريطة'),
+            onSelected: (i) => setMapStyle(mapStyles[i].id),
+            itemBuilder: (_) => [
+              for (var i = 0; i < mapStyles.length; i++)
+                CheckedPopupMenuItem(
+                    value: i,
+                    checked: mapStyleIndex.value == i,
+                    child: Text(tr(mapStyles[i].name))),
+            ],
+            child: _roundBtn(
+                onTap: null, child: const Icon(Icons.layers_outlined)),
+          ),
+        ),
         if (_results != null && !nav.active)
           PositionedDirectional(
             top: 64,
@@ -746,7 +764,7 @@ class _DriveModePageState extends State<DriveModePage> {
 
   Widget _roundBtn(
           {required Widget child,
-          required VoidCallback onTap,
+          required VoidCallback? onTap,
           String? tooltip}) =>
       Tooltip(
         message: tooltip ?? '',
