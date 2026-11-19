@@ -1,3 +1,4 @@
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 
 import '../obd/obd_service.dart';
@@ -106,11 +107,38 @@ class MaintenanceService extends ChangeNotifier {
     final off = settings.odoOffset ?? (_estimateBase == null ? 0.0 : null);
     if (off == null) return null;
     final km = d + off;
-    // If codes were cleared since calibration, 0131 restarts from 0 and
-    // the result drops below the last known reading: stop trusting it.
+    // If codes were cleared (by us or a mechanic), 0131 restarts from 0 and
+    // the result drops below the last reading we saw: re-learn the offset
+    // from that reading so the odometer carries on instead of going blank.
+    final last = _lastKm;
+    if (last != null && km < last - 5) {
+      final fixed = last - d;
+      Future.microtask(() => settings.setOdoOffset(fixed));
+      return last;
+    }
     final base = settings.odoBaseKm;
-    if (base != null && km < base - 5) return null;
+    if (last == null && base != null && km < base - 5) return null;
+    if (last == null || km >= last + 1) _rememberLast(km);
     return km;
+  }
+
+  /// Last odometer computed from 0131, kept per car across restarts.
+  double? _lastKm;
+  int? _lastKmVehicle;
+  SharedPreferences? _prefs;
+  void _rememberLast(double km) {
+    _lastKm = km;
+    final id = settings.vehicle.id;
+    SharedPreferences.getInstance().then((p) {
+      _prefs = p;
+      p.setDouble('odoLast_$id', km);
+    });
+  }
+
+  Future<void> _loadLast() async {
+    final p = _prefs ??= await SharedPreferences.getInstance();
+    _lastKmVehicle = settings.vehicle.id;
+    _lastKm = p.getDouble('odoLast_${settings.vehicle.id}');
   }
 
   /// Where the odometer value comes from: 'obd', 'ecu', 'estimate' or null.
@@ -139,6 +167,7 @@ class MaintenanceService extends ChangeNotifier {
   Future<void> setDashboardOdometer(double km) async {
     final d = obd.values[0x31];
     if (d != null) await settings.setOdoOffset(km - d);
+    _rememberLast(km); // a manual correction may go down; trust it
     await settings.setOdometer(km);
   }
 
@@ -156,10 +185,12 @@ class MaintenanceService extends ChangeNotifier {
     trips.addListener(_onTrips);
     settings.addListener(_onSettings);
     obd.addListener(_onObd);
+    _loadLast();
   }
 
   int? _vehicleId;
   void _onSettings() {
+    if (settings.vehicle.id != _lastKmVehicle) _loadLast();
     if (settings.vehicle.id != _vehicleId) {
       load(); // switched car: reload its history
     } else {
