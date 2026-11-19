@@ -1182,31 +1182,7 @@ class _DriveModePageState extends State<DriveModePage> {
                             style: TextStyle(color: scheme.onSurfaceVariant)),
                     ],
                   ),
-                  // Shift light: 12 blocks, green → amber → red up to 6000 rpm.
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: Row(
-                      children: [
-                        for (var i = 0; i < 12; i++)
-                          Expanded(
-                            child: Container(
-                              height: 10,
-                              margin: const EdgeInsets.symmetric(horizontal: 2),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(3),
-                                color: (rpm ?? 0) >= 6000 * (i + 1) / 12
-                                    ? (i < 7
-                                        ? AppColors.ok(context)
-                                        : i < 10
-                                            ? AppColors.warning(context)
-                                            : AppColors.danger(context))
-                                    : scheme.outlineVariant,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
+                  const SizedBox(height: 6),
                   Expanded(
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
