@@ -57,7 +57,7 @@ class AaCarPresentation(
         val texture = TextureView(context)
         // The handshake can take a while; say so until the first frame lands instead of showing black.
         val starting = TextView(context).apply {
-            setText(dev.caraalink.R.string.car_starting)
+            setText(com.ezzat.obd_saga.R.string.car_starting)
             textSize = 24f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
