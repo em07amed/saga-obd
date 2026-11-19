@@ -570,4 +570,9 @@ const Map<String, String> _en = {
   'OpenStreetMap (عربي)': 'OpenStreetMap (Arabic)',
   'OSM ملوّنة': 'OSM colourful',
   'قمر صناعي (Esri)': 'Satellite (Esri)',
+  'الرئيسية': 'Home',
+  'الوصول': 'Arrival',
+  'بيحمّل…': 'Loading…',
+  'التطبيق اللي شغال على الموبايل': 'Playing on your phone',
+  'الموسيقى': 'Music',
 };

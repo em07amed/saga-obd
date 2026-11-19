@@ -29,18 +29,18 @@ class DriveModePage extends StatefulWidget {
   State<DriveModePage> createState() => _DriveModePageState();
 }
 
-enum _Panel { gauges, map, music, radio, phone }
+enum _Panel { home, gauges, map, music, radio, phone }
 
 class _DriveModePageState extends State<DriveModePage> {
-  _Panel _panel = _Panel.gauges;
-  bool get _map => _panel == _Panel.map;
+  _Panel _panel = _Panel.home;
+  bool get _map => _panel == _Panel.map || _panel == _Panel.home;
   final _search = TextEditingController();
   List<Place>? _results;
   bool _searching = false;
 
   void _show(_Panel p, {bool toggle = false}) {
-    setState(() => _panel = toggle && _panel == p ? _Panel.gauges : p);
-    if (p == _Panel.map) _startGps();
+    setState(() => _panel = toggle && _panel == p ? _Panel.home : p);
+    if (p == _Panel.map || p == _Panel.home) _startGps();
   }
 
   Future<void> _doSearch(String q) async {
@@ -295,7 +295,7 @@ class _DriveModePageState extends State<DriveModePage> {
     }
   }
 
-  Widget _liveMap(BuildContext context) {
+  Widget _liveMap(BuildContext context, {bool compact = false}) {
     final p = _pos;
     final scheme = Theme.of(context).colorScheme;
     if (p == null) {
@@ -396,7 +396,7 @@ class _DriveModePageState extends State<DriveModePage> {
           ],
         ),
         // Big turn card while navigating, "where to?" otherwise.
-        if (nav.active && step != null)
+        if (!compact && nav.active && step != null)
           PositionedDirectional(
             top: 8,
             start: 8,
@@ -432,6 +432,16 @@ class _DriveModePageState extends State<DriveModePage> {
                   ]),
                 ),
               ),
+            ),
+          )
+        else if (compact)
+          PositionedDirectional(
+            top: 8,
+            start: 8,
+            child: _roundBtn(
+              tooltip: tr('رايح فين؟'),
+              onTap: () => _show(_Panel.map),
+              child: const Icon(Icons.search),
             ),
           )
         else
@@ -507,7 +517,7 @@ class _DriveModePageState extends State<DriveModePage> {
                 onTap: null, child: const Icon(Icons.layers_outlined)),
           ),
         ),
-        if (_results != null && !nav.active)
+        if (!compact && _results != null && !nav.active)
           PositionedDirectional(
             top: 64,
             start: 8,
@@ -549,7 +559,7 @@ class _DriveModePageState extends State<DriveModePage> {
                     title: Text(nav.error!))),
           ),
         // Speedometer bubble + limit sign, bottom corner (like Waze).
-        if (_results == null || nav.active)
+        if (!compact && (_results == null || nav.active))
           PositionedDirectional(
             start: 10,
             bottom: nav.active ? 82 : 12,
@@ -672,8 +682,31 @@ class _DriveModePageState extends State<DriveModePage> {
               label: Text(tr('رجّع الخريطة')),
             ),
           ),
+        // Compact: just the arrival time, like a head unit.
+        if (compact && nav.active)
+          PositionedDirectional(
+            start: 0,
+            end: 0,
+            bottom: 10,
+            child: Center(
+              child: Material(
+                color: Colors.black.withValues(alpha: 0.75),
+                borderRadius: BorderRadius.circular(14),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Text(
+                      tr('الوصول ${_clock(DateTime.now().add(nav.remaining))}'),
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ),
+          ),
         // Arrival bar: ETA clock, minutes, km, stop.
-        if (nav.active)
+        if (nav.active && !compact)
           PositionedDirectional(
             start: 8,
             end: 8,
@@ -721,6 +754,193 @@ class _DriveModePageState extends State<DriveModePage> {
           ),
       ]),
     );
+  }
+
+  // ---------- head-unit home: map + next turn / car + media ----------
+
+  Widget _dashboard(BuildContext context) {
+    return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Expanded(flex: 6, child: _liveMap(context, compact: true)),
+      const SizedBox(width: 8),
+      Expanded(
+        flex: 4,
+        child: Column(children: [
+          Expanded(child: _tile(context, _turnOrCar(context))),
+          const SizedBox(height: 8),
+          Expanded(
+            child: _tile(
+                context,
+                ListenableBuilder(
+                    listenable: App.radio,
+                    builder: (context, _) => _media(context))),
+          ),
+        ]),
+      ),
+    ]);
+  }
+
+  Widget _tile(BuildContext context, Widget child) => Material(
+        color: Theme.of(context).colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(18),
+        clipBehavior: Clip.antiAlias,
+        child: Padding(padding: const EdgeInsets.all(14), child: child),
+      );
+
+  Widget _turnOrCar(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final nav = App.nav;
+    final step = nav.next;
+    if (nav.active && step != null) {
+      return InkWell(
+        onTap: () => _show(_Panel.map),
+        child: Row(children: [
+          Icon(step.icon, size: 56, color: scheme.primary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                FittedBox(
+                  child: Text(NavService.fmtDist(nav.toNextM),
+                      style: const TextStyle(
+                          fontSize: 30, fontWeight: FontWeight.w900)),
+                ),
+                Text(tr(step.text),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 16, color: scheme.onSurfaceVariant)),
+              ],
+            ),
+          ),
+        ]),
+      );
+    }
+    // Not navigating: the car at a glance.
+    final v = App.obd.values;
+    final coolant = v[Pids.coolant];
+    final litres = App.fuel.litresNow;
+    Widget mini(IconData i, String val, String unit, {Color? c}) =>
+        Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(i, size: 18, color: c ?? scheme.onSurfaceVariant),
+          Text(val,
+              style: TextStyle(
+                  fontSize: 18, fontWeight: FontWeight.bold, color: c)),
+          Text(unit,
+              style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant)),
+        ]);
+    return InkWell(
+      onTap: () => _show(_Panel.gauges),
+      child: Column(children: [
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(
+                child: FittedBox(
+                  child: Text(fmt(v[Pids.speed]),
+                      style: const TextStyle(
+                          fontSize: 64,
+                          height: 1,
+                          fontWeight: FontWeight.w900)),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(tr('كم/س'),
+                    style: TextStyle(color: scheme.onSurfaceVariant)),
+              ),
+            ],
+          ),
+        ),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+          mini(Icons.thermostat, fmt(coolant), '°C',
+              c: coolant != null && coolant >= App.settings.coolantAlert
+                  ? AppColors.danger(context)
+                  : null),
+          mini(Icons.local_gas_station, fmt(litres, 1), tr('لتر')),
+          mini(Icons.rotate_right, fmt(v[Pids.rpm]), 'RPM'),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _media(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final radio = App.radio;
+    final st = radio.current;
+    final bt = App.obd.bt;
+    final art = st != null && st.favicon.isNotEmpty
+        ? Image.network(st.favicon,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => const Icon(Icons.radio, size: 32))
+        : Icon(st != null ? Icons.radio : Icons.music_note, size: 32);
+    Widget ctl(IconData i, VoidCallback f, {double size = 34}) => IconButton(
+          iconSize: size,
+          onPressed: () {
+            HapticFeedback.selectionClick();
+            f();
+          },
+          icon: Icon(i),
+        );
+    return Column(children: [
+      Expanded(
+        child: InkWell(
+          onTap: () => _show(st != null ? _Panel.radio : _Panel.music),
+          child: Row(children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                width: 56,
+                height: 56,
+                color: scheme.surfaceContainerHighest,
+                child: Center(child: art),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(st?.name ?? tr('الموسيقى'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 17, fontWeight: FontWeight.bold)),
+                  Text(
+                      st != null
+                          ? (radio.loading ? tr('بيحمّل…') : tr('راديو'))
+                          : tr('التطبيق اللي شغال على الموبايل'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: scheme.onSurfaceVariant)),
+                ],
+              ),
+            ),
+          ]),
+        ),
+      ),
+      if (st != null)
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          ctl(radio.playing ? Icons.stop_rounded : Icons.play_arrow_rounded,
+              () => radio.playing ? radio.stop() : radio.play(st),
+              size: 40),
+        ])
+      else
+        Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+          ctl(Icons.skip_previous_rounded,
+              () => bt.mediaKey('prev').catchError((_) {})),
+          ctl(Icons.play_arrow_rounded,
+              () => bt.mediaKey('play_pause').catchError((_) {}),
+              size: 40),
+          ctl(Icons.skip_next_rounded,
+              () => bt.mediaKey('next').catchError((_) {})),
+        ]),
+    ]);
   }
 
   /// Tap on the limit sign: correct the limit of the road we're on.
@@ -1093,7 +1313,9 @@ class _DriveModePageState extends State<DriveModePage> {
                         ),
                         Expanded(
                           flex: 4,
-                          child: _panel == _Panel.map
+                          child: _panel == _Panel.home
+                              ? _dashboard(context)
+                              : _panel == _Panel.map
                               ? _liveMap(context)
                               : _panel == _Panel.music
                                   ? const MusicPanel()
@@ -1245,6 +1467,8 @@ class _Dock extends StatelessWidget {
         );
 
     return Row(children: [
+      btn(Icons.dashboard_rounded, tr('الرئيسية'), () => onPanel(_Panel.home),
+          active: current == _Panel.home),
       btn(Icons.speed, tr('العدادات'), () => onPanel(_Panel.gauges),
           active: current == _Panel.gauges),
       btn(Icons.navigation, tr('خرائط'), () => onPanel(_Panel.map),
