@@ -556,4 +556,7 @@ const Map<String, String> _en = {
   'سبيكر': 'Speaker',
   'مش قادر أتحكم في المكالمة. اسمح بإذن الهاتف': "Can't control the call. Allow the phone permission",
   'اسمح بإذن الميكروفون': 'Allow the microphone permission',
+  'الشمال لفوق': 'North up',
+  'اتجاه السير لفوق': 'Heading up',
+  'رجّع الخريطة': 'Recenter',
 };

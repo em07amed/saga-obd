@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -258,6 +259,8 @@ class _DriveModePageState extends State<DriveModePage> {
   Position? _pos;
   final List<LatLng> _path = [];
   bool _follow = true;
+  bool _headingUp = true; // map turns with the car, like Waze
+  double _heading = 0;
 
   Future<void> _startGps() async {
     if (_gps == null) {
@@ -282,9 +285,10 @@ class _DriveModePageState extends State<DriveModePage> {
         if (_map && _follow) {
           // Zoom out a little at speed so more road ahead is visible.
           final kmh = p.speed * 3.6;
-          final zoom = kmh > 90 ? 15.0 : kmh > 50 ? 16.0 : 17.0;
+          final zoom = kmh > 90 ? 15.5 : kmh > 50 ? 16.5 : 17.5;
+          if (p.speed > 1.5 && !p.heading.isNaN) _heading = p.heading;
           try {
-            _mapCtl.move(at, zoom);
+            _mapCtl.moveAndRotate(at, zoom, _headingUp ? 360 - _heading : 0);
           } catch (_) {}
         }
       });
@@ -308,14 +312,29 @@ class _DriveModePageState extends State<DriveModePage> {
     final at = LatLng(p.latitude, p.longitude);
     final nav = App.nav;
     final step = nav.next;
-    return Card(
-      clipBehavior: Clip.antiAlias,
+    final s = App.settings;
+    final kmh = App.obd.values[Pids.speed] ?? p.speed * 3.6;
+    final limit = App.road.effectiveLimit;
+    final over = s.speedAlertMode != 'off' && kmh > limit;
+    const wazeBlue = Color(0xFF33CCFF);
+    const wazeNavy = Color(0xFF0A2A4A);
+
+    void recenter() {
+      setState(() => _follow = true);
+      try {
+        _mapCtl.moveAndRotate(at, 17.5, _headingUp ? 360 - _heading : 0);
+      } catch (_) {}
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
       child: Stack(children: [
         FlutterMap(
           mapController: _mapCtl,
           options: MapOptions(
             initialCenter: at,
-            initialZoom: 17,
+            initialZoom: 17.5,
+            initialRotation: _headingUp ? 360 - _heading : 0,
             interactionOptions: const InteractionOptions(
               flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
             ),
@@ -329,82 +348,89 @@ class _DriveModePageState extends State<DriveModePage> {
               PolylineLayer(polylines: [
                 Polyline(
                     points: nav.route,
-                    color: const Color(0xFF1E88E5),
-                    strokeWidth: 8,
-                    borderColor: Colors.white,
-                    borderStrokeWidth: 2),
-              ]),
-            if (_path.length > 1)
-              PolylineLayer(polylines: [
-                Polyline(points: _path, color: scheme.primary, strokeWidth: 5),
+                    color: wazeBlue,
+                    strokeWidth: 10,
+                    borderColor: const Color(0xFF1565C0),
+                    borderStrokeWidth: 3),
               ]),
             MarkerLayer(markers: [
               for (final c in App.road.cameras)
                 Marker(
                   point: c.at,
-                  width: 30,
-                  height: 30,
+                  width: 34,
+                  height: 34,
+                  rotate: true,
                   child: mapPin(const Color(0xFFD32F2F), Icons.camera_alt,
-                      size: 15),
+                      size: 17),
                 ),
               if (nav.destination != null)
                 Marker(
                   point: nav.destination!.at,
-                  width: 34,
-                  height: 34,
-                  child: mapPin(const Color(0xFFD32F2F), Icons.flag),
+                  width: 40,
+                  height: 40,
+                  rotate: true,
+                  child: mapPin(const Color(0xFF2E7D32), Icons.flag, size: 20),
                 ),
+              // The car: a white puck with a bright arrow, pointing the way.
               Marker(
                 point: at,
-                width: 40,
-                height: 40,
+                width: 54,
+                height: 54,
                 child: Transform.rotate(
-                  angle: (p.heading.isNaN ? 0 : p.heading) * 3.14159265 / 180,
-                  child: Icon(Icons.navigation,
-                      size: 40,
-                      color: scheme.primary,
-                      shadows: const [
-                        Shadow(blurRadius: 6, color: Colors.black54)
-                      ]),
+                  angle: _heading * math.pi / 180,
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(blurRadius: 8, color: Colors.black38)
+                      ],
+                    ),
+                    child: const Icon(Icons.navigation,
+                        size: 38, color: Color(0xFF1E88E5)),
+                  ),
                 ),
               ),
             ]),
             mapAttribution(),
           ],
         ),
-        // Turn-by-turn banner while navigating, search bar otherwise.
+        // Big turn card while navigating, "where to?" otherwise.
         if (nav.active && step != null)
           PositionedDirectional(
             top: 8,
             start: 8,
-            end: 8,
-            child: Material(
-              color: const Color(0xFF1E88E5),
-              borderRadius: BorderRadius.circular(14),
-              elevation: 4,
-              child: Padding(
-                padding: const EdgeInsets.all(10),
-                child: Row(children: [
-                  Icon(step.icon, size: 44, color: Colors.white),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(NavService.fmtDist(nav.toNextM),
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 24,
-                                fontWeight: FontWeight.w900)),
-                        Text(tr(step.text),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                color: Colors.white, fontSize: 16)),
-                      ],
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 380),
+              child: Material(
+                color: wazeNavy,
+                borderRadius: BorderRadius.circular(18),
+                elevation: 6,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 10, 18, 10),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(step.icon, size: 52, color: Colors.white),
+                    const SizedBox(width: 12),
+                    Flexible(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(NavService.fmtDist(nav.toNextM),
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 30,
+                                  fontWeight: FontWeight.w900)),
+                          Text(tr(step.text),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  color: Colors.white70, fontSize: 16)),
+                        ],
+                      ),
                     ),
-                  ),
-                ]),
+                  ]),
+                ),
               ),
             ),
           )
@@ -412,9 +438,9 @@ class _DriveModePageState extends State<DriveModePage> {
           PositionedDirectional(
             top: 8,
             start: 8,
-            end: 8,
+            end: 64,
             child: Material(
-              elevation: 3,
+              elevation: 4,
               borderRadius: BorderRadius.circular(28),
               color: scheme.surface,
               child: TextField(
@@ -446,6 +472,23 @@ class _DriveModePageState extends State<DriveModePage> {
               ),
             ),
           ),
+        // Compass: heading-up (map turns with you) or north-up.
+        PositionedDirectional(
+          top: 8,
+          end: 8,
+          child: _roundBtn(
+            tooltip: _headingUp ? tr('الشمال لفوق') : tr('اتجاه السير لفوق'),
+            onTap: () {
+              setState(() => _headingUp = !_headingUp);
+              recenter();
+            },
+            child: Transform.rotate(
+              angle: _headingUp ? -_heading * math.pi / 180 : 0,
+              child: Icon(Icons.navigation,
+                  color: _headingUp ? const Color(0xFFD32F2F) : scheme.onSurface),
+            ),
+          ),
+        ),
         if (_results != null && !nav.active)
           PositionedDirectional(
             top: 64,
@@ -476,11 +519,10 @@ class _DriveModePageState extends State<DriveModePage> {
                     ]),
             ),
           ),
-        if (nav.routing)
-          const Center(child: CircularProgressIndicator()),
+        if (nav.routing) const Center(child: CircularProgressIndicator()),
         if (nav.error != null)
           PositionedDirectional(
-            bottom: 60,
+            bottom: 90,
             start: 8,
             end: 8,
             child: Card(
@@ -488,55 +530,152 @@ class _DriveModePageState extends State<DriveModePage> {
                     leading: const Icon(Icons.wifi_off),
                     title: Text(nav.error!))),
           ),
-        // Remaining distance / time and stop button.
+        // Speedometer bubble + limit sign, bottom corner (like Waze).
+        if (_results == null || nav.active)
+          PositionedDirectional(
+            start: 10,
+            bottom: nav.active ? 82 : 12,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Container(
+                  width: 74,
+                  height: 74,
+                  decoration: BoxDecoration(
+                    color: over ? const Color(0xFFD32F2F) : Colors.white,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                        color: over ? Colors.white : const Color(0xFF263238),
+                        width: 3),
+                    boxShadow: const [
+                      BoxShadow(blurRadius: 8, color: Colors.black38)
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text('${kmh.round()}',
+                          style: TextStyle(
+                              fontSize: 28,
+                              height: 1,
+                              fontWeight: FontWeight.w900,
+                              color: over ? Colors.white : Colors.black87)),
+                      Text(tr('كم/س'),
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: over ? Colors.white : Colors.black54)),
+                    ],
+                  ),
+                ),
+                if (s.speedAlertMode != 'off') ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    width: 46,
+                    height: 46,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      border:
+                          Border.all(color: const Color(0xFFD32F2F), width: 5),
+                      boxShadow: const [
+                        BoxShadow(blurRadius: 6, color: Colors.black26)
+                      ],
+                    ),
+                    child: Text('${limit.round()}',
+                        style: const TextStyle(
+                            color: Colors.black,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900)),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        if (!_follow)
+          PositionedDirectional(
+            end: 10,
+            bottom: nav.active ? 86 : 14,
+            child: FloatingActionButton.extended(
+              heroTag: 'recenter',
+              backgroundColor: Colors.white,
+              foregroundColor: const Color(0xFF1565C0),
+              onPressed: recenter,
+              icon: const Icon(Icons.navigation),
+              label: Text(tr('رجّع الخريطة')),
+            ),
+          ),
+        // Arrival bar: ETA clock, minutes, km, stop.
         if (nav.active)
           PositionedDirectional(
-            bottom: 8,
             start: 8,
+            end: 8,
+            bottom: 8,
             child: Material(
-              elevation: 3,
-              borderRadius: BorderRadius.circular(24),
+              elevation: 6,
+              borderRadius: BorderRadius.circular(20),
               color: scheme.surface,
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Text(
-                      '${NavService.fmtDist(nav.remainingM)} • ${nav.remaining.inMinutes} ${tr('د')}',
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(width: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Row(children: [
+                  IconButton.filledTonal(
+                    tooltip: tr('إنهاء'),
+                    style: IconButton.styleFrom(
+                        backgroundColor: const Color(0x22D32F2F)),
+                    onPressed: nav.stop,
+                    icon: Icon(Icons.close, color: AppColors.danger(context)),
+                  ),
+                  Expanded(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          _clock(DateTime.now().add(nav.remaining)),
+                          style: const TextStyle(
+                              fontSize: 26, fontWeight: FontWeight.w900),
+                        ),
+                        const SizedBox(width: 14),
+                        Text(
+                          '${nav.remaining.inMinutes} ${tr('د')}  •  ${NavService.fmtDist(nav.remainingM)}',
+                          style: TextStyle(
+                              fontSize: 16, color: scheme.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                  ),
                   IconButton(
                     tooltip: tr('كمّل في Google Maps'),
                     icon: const Icon(Icons.assistant_navigation),
                     onPressed: () => _googleMaps(nav.destination!.at),
                   ),
-                  TextButton.icon(
-                    onPressed: nav.stop,
-                    icon: Icon(Icons.close, color: AppColors.danger(context)),
-                    label: Text(tr('إنهاء'),
-                        style: TextStyle(color: AppColors.danger(context))),
-                  ),
                 ]),
               ),
-            ),
-          ),
-        if (!_follow)
-          PositionedDirectional(
-            bottom: 12,
-            end: 12,
-            child: FloatingActionButton.small(
-              heroTag: 'recenter',
-              tooltip: tr('تتبّع موقعي'),
-              onPressed: () {
-                setState(() => _follow = true);
-                _mapCtl.move(at, 17);
-              },
-              child: const Icon(Icons.my_location),
             ),
           ),
       ]),
     );
   }
+
+  static String _clock(DateTime t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+  Widget _roundBtn(
+          {required Widget child,
+          required VoidCallback onTap,
+          String? tooltip}) =>
+      Tooltip(
+        message: tooltip ?? '',
+        child: Material(
+          color: Theme.of(context).colorScheme.surface,
+          shape: const CircleBorder(),
+          elevation: 4,
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onTap,
+            child: SizedBox(width: 48, height: 48, child: Center(child: child)),
+          ),
+        ),
+      );
 
   @override
   void initState() {
@@ -750,6 +889,8 @@ class _DriveModePageState extends State<DriveModePage> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         // Speed: the biggest number on screen.
+                        // (Hidden on the map: it goes full width like Waze.)
+                        if (!_map)
                         Expanded(
                           flex: 3,
                           child: Card(
