@@ -32,13 +32,17 @@ jobs:
           flutter create --org com.ezzat --platforms android obd_saga
           cp -r src/lib src/test src/assets src/pubspec.yaml obd_saga/
           cp src/android/app/src/main/AndroidManifest.xml obd_saga/android/app/src/main/
-          mkdir -p obd_saga/android/app/src/main/kotlin/com/ezzat/obd_saga
-          cp src/android/app/src/main/kotlin/com/ezzat/obd_saga/*.kt \
-             obd_saga/android/app/src/main/kotlin/com/ezzat/obd_saga/
+          # Our Kotlin + the AA Bridge engine (dev/caraalink, GPL-3.0).
+          rm -rf obd_saga/android/app/src/main/kotlin
+          cp -r src/android/app/src/main/kotlin obd_saga/android/app/src/main/
           cp -r src/android/app/src/main/res/. obd_saga/android/app/src/main/res/
-          # Android Auto (Car App Library) for the car-screen view.
-          printf '\ndependencies {\n    implementation("androidx.car.app:app:1.4.0")\n}\n' \
-             >> obd_saga/android/app/build.gradle.kts
+          mkdir -p obd_saga/android/app/src/main/assets
+          cp -r src/android/app/src/main/assets/. obd_saga/android/app/src/main/assets/
+          G=obd_saga/android/app/build.gradle.kts
+          # The car-screen engine needs Android 10+.
+          sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 29/' $G
+          grep -q 'minSdk = 29' $G
+          printf '\ndependencies {\n    implementation("androidx.car.app:app:1.4.0")\n    implementation("androidx.preference:preference-ktx:1.2.1")\n}\n' >> $G
 
       # Same signing key on every build, so updates install over the
       # previous version instead of failing with "App not installed".

@@ -161,6 +161,15 @@ class BtChannel {
   Future<String?> listen(String lang) =>
       _method.invokeMethod<String>('listen', {'lang': lang});
 
+  /// Car-screen (AA Bridge) status: aaInstalled, server, phase, link, car, error.
+  Future<Map<String, dynamic>> aaStatus() async {
+    final m = await _method.invokeMethod<Map>('aaStatus');
+    return m == null ? {} : Map<String, dynamic>.from(m);
+  }
+
+  Future<void> aaOpenSettings() => _method.invokeMethod('aaOpenSettings');
+  Future<void> aaStop() => _method.invokeMethod('aaStop');
+
   /// Readings for the Android Auto screen (car display).
   Future<void> carUpdate(Map<String, dynamic> data) =>
       _method.invokeMethod('carUpdate', data);

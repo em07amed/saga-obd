@@ -1,5 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Car screen (CarbitLink / QDLink) via the AA Bridge engine, cable -->
+    <uses-feature android:name="android.hardware.usb.accessory" android:required="false" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <!-- Bluetooth: legacy (Android 11 and below) -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
@@ -58,7 +65,20 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Plugging into a CarbitLink / QDLink car opens us and starts the car screen -->
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_ACCESSORY_ATTACHED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.hardware.usb.action.USB_ACCESSORY_ATTACHED"
+                android:resource="@xml/accessory_filter" />
         </activity>
+        <!-- AA Bridge engine: streams Android Auto to the car screen over USB -->
+        <service
+            android:name="dev.caraalink.service.UsbLinkForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice|microphone|location" />
+
         <!-- Live readings on the car screen through Android Auto -->
         <service
             android:name=".CarObdService"
@@ -93,6 +113,7 @@
     </application>
 
     <queries>
+        <package android:name="com.google.android.projection.gearhead" />
         <intent>
             <action android:name="android.speech.RecognitionService" />
         </intent>

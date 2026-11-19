@@ -44,6 +44,32 @@ class MainActivity : FlutterActivity() {
     private fun adapter(): BluetoothAdapter? =
         (getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
 
+    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        super.onCreate(savedInstanceState)
+        startCarScreenIfAttached(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        startCarScreenIfAttached(intent)
+    }
+
+    /** Opened because the car's USB (CarbitLink/QDLink) was plugged in:
+     *  start streaming Android Auto to the car screen. */
+    private fun startCarScreenIfAttached(i: Intent?) {
+        if (i?.action != android.hardware.usb.UsbManager.ACTION_USB_ACCESSORY_ATTACHED) return
+        @Suppress("DEPRECATION")
+        val acc = i.getParcelableExtra<android.hardware.usb.UsbAccessory>(
+            android.hardware.usb.UsbManager.EXTRA_ACCESSORY) ?: return
+        try {
+            startForegroundService(
+                Intent(this, dev.caraalink.service.UsbLinkForegroundService::class.java)
+                    .setAction(dev.caraalink.service.UsbLinkForegroundService.ACTION_START_SESSION)
+                    .putExtra(android.hardware.usb.UsbManager.EXTRA_ACCESSORY, acc))
+        } catch (_: Exception) {}
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         val messenger = flutterEngine.dartExecutor.binaryMessenger
@@ -151,6 +177,28 @@ class MainActivity : FlutterActivity() {
                     result.success(audio().isMicrophoneMute)
                 }
                 "callCurrent" -> result.success(callInfo())
+                // ---- car screen (AA Bridge engine) ----
+                "aaStatus" -> Thread {
+                    val snap = dev.caraalink.connection.ConnectionStateHolder.snapshot
+                    val m = mapOf(
+                        "aaInstalled" to (packageManager.getLaunchIntentForPackage(
+                            "com.google.android.projection.gearhead") != null),
+                        "server" to dev.caraalink.aa.AndroidAutoServer.isRunning(),
+                        "phase" to snap.phase.name,
+                        "link" to snap.link.name,
+                        "car" to (snap.carName ?: snap.accessoryModel),
+                        "error" to snap.lastError,
+                    )
+                    main.post { result.success(m) }
+                }.start()
+                "aaOpenSettings" -> result.success(dev.caraalink.aa.AndroidAutoServer.openSettings(this))
+                "aaStop" -> {
+                    try {
+                        startService(Intent(this, dev.caraalink.service.UsbLinkForegroundService::class.java)
+                            .setAction(dev.caraalink.service.UsbLinkForegroundService.ACTION_STOP))
+                    } catch (_: Exception) {}
+                    result.success(true)
+                }
                 "carUpdate" -> {
                     CarData.title = call.argument<String>("title") ?: "Car OBD"
                     CarData.waiting = call.argument<String>("waiting") ?: CarData.waiting
