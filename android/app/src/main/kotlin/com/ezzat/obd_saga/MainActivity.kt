@@ -177,6 +177,10 @@ class MainActivity : FlutterActivity() {
                     result.success(audio().isMicrophoneMute)
                 }
                 "callCurrent" -> result.success(callInfo())
+                "battery" -> result.success(try {
+                    (getSystemService(Context.BATTERY_SERVICE) as android.os.BatteryManager)
+                        .getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
+                } catch (_: Exception) { null })
                 // ---- car screen (AA Bridge engine) ----
                 "aaStatus" -> Thread {
                     val snap = dev.caraalink.connection.ConnectionStateHolder.snapshot

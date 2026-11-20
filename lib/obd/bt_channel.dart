@@ -170,6 +170,9 @@ class BtChannel {
   Future<void> aaOpenSettings() => _method.invokeMethod('aaOpenSettings');
   Future<void> aaStop() => _method.invokeMethod('aaStop');
 
+  /// Phone battery percent.
+  Future<int?> battery() => _method.invokeMethod<int>('battery');
+
   /// Readings for the Android Auto screen (car display).
   Future<void> carUpdate(Map<String, dynamic> data) =>
       _method.invokeMethod('carUpdate', data);
