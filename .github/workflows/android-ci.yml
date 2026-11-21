@@ -1,0 +1,53 @@
+name: Android CI
+# Auto-labels each run in the Actions list instead of a generic "Android
+# CI" repeated for every single run: a PR build names itself after the PR
+# (number + title), anything else after the branch and short commit.
+run-name: >-
+  ${{ github.event_name == 'pull_request'
+    && format('PR #{0}: {1}', github.event.pull_request.number, github.event.pull_request.title)
+    || format('{0} @ {1}', github.ref_name, github.sha) }}
+
+on:
+  push:
+    branches: [main, speed-radar-alerts, aa-bridge-alerts]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Accept Android SDK licenses
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+
+      - name: Install required SDK platform/build-tools
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Road alert tests
+        run: ./gradlew testDebugUnitTest --tests 'dev.caraalink.road.*' --no-daemon
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14

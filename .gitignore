@@ -1,0 +1,32 @@
+# Third-party research artifacts (large, not ours to redistribute)
+*.apk
+CarbitLink-EasyConnection_6.5.1_APKPure/
+PhoneAuto-beta-2027-01-19/
+.DS_Store
+
+# Android / Gradle
+*.iml
+.gradle/
+local.properties
+.idea/
+.DS_Store
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.keystore
+*.jks
+keystore.properties
+# Exception: a shared, non-secret DEBUG-only key committed on purpose so
+# local builds and CI produce the same signature (see app/build.gradle.kts).
+# Never do this for a release keystore.
+!app/debug.keystore
+
+# USB capture artifacts (may contain session-specific data)
+*.pcap
+*.pcapng
+usbmon-*.log
+.claude/
+
+# raw device logcat dumps (contain car/device IDs)
+cl*.txt

@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="resolution_mode_entries">
+        <item>Match head unit (auto)</item>
+        <item>Custom</item>
+    </string-array>
+    <string-array name="resolution_mode_values">
+        <item>auto</item>
+        <item>custom</item>
+    </string-array>
+
+    <string-array name="car_orientation_entries">
+        <item>Auto-detect from car</item>
+        <item>Landscape (wide screen)</item>
+        <item>Portrait (tall screen)</item>
+    </string-array>
+    <string-array name="car_orientation_values">
+        <item>auto</item>
+        <item>landscape</item>
+        <item>portrait</item>
+    </string-array>
+
+    <string-array name="frame_rate_entries">
+        <item>24 fps</item>
+        <item>30 fps</item>
+        <item>60 fps</item>
+    </string-array>
+    <string-array name="frame_rate_values">
+        <item>24</item>
+        <item>30</item>
+        <item>60</item>
+    </string-array>
+
+    <string-array name="sample_rate_entries">
+        <item>44.1 kHz</item>
+        <item>48 kHz</item>
+    </string-array>
+    <string-array name="sample_rate_values">
+        <item>44100</item>
+        <item>48000</item>
+    </string-array>
+
+    <string-array name="aa_fill_mode_entries">
+        <item>Fit (show everything, black bars)</item>
+        <item>Fill (edge to edge, crops a little)</item>
+    </string-array>
+    <string-array name="aa_fill_mode_values">
+        <item>fit</item>
+        <item>fill</item>
+    </string-array>
+
+    <string-array name="aa_audio_route_entries">
+        <item>Bluetooth if connected, else phone</item>
+        <item>Always phone mic/speaker</item>
+        <item>Phone plays music and prompts itself (over its Bluetooth to the car)</item>
+    </string-array>
+    <string-array name="aa_audio_route_values">
+        <item>bt_preferred</item>
+        <item>device_only</item>
+        <item>phone_direct</item>
+    </string-array>
+
+    <!--
+      USB role is CONFIRMED (see claude/roadmap.md): phone is the accessory,
+      head unit is the host. This override exists for debugging only — do
+      not flip it on real hardware unless you know why.
+    -->
+    <string-array name="usb_role_entries">
+        <item>Auto (confirmed: accessory)</item>
+        <item>Force accessory</item>
+        <item>Force host</item>
+    </string-array>
+    <string-array name="usb_role_values">
+        <item>auto</item>
+        <item>accessory</item>
+        <item>host</item>
+    </string-array>
+    <!-- Speed & radar alerts -->
+    <string-array name="road_manual_limit_entries">
+        <item>@string/road_off</item>
+        <item>60</item>
+        <item>80</item>
+        <item>90</item>
+        <item>100</item>
+        <item>120</item>
+    </string-array>
+    <string-array name="road_manual_limit_values">
+        <item>0</item>
+        <item>60</item>
+        <item>80</item>
+        <item>90</item>
+        <item>100</item>
+        <item>120</item>
+    </string-array>
+    <string-array name="road_tolerance_entries">
+        <item>0</item>
+        <item>5</item>
+        <item>10</item>
+    </string-array>
+    <string-array name="road_tolerance_values">
+        <item>0</item>
+        <item>5</item>
+        <item>10</item>
+    </string-array>
+    <string-array name="road_sound_entries">
+        <item>@string/road_sound_voice</item>
+        <item>@string/road_sound_beep</item>
+        <item>@string/road_off</item>
+    </string-array>
+    <string-array name="road_sound_values">
+        <item>voice</item>
+        <item>beep</item>
+        <item>off</item>
+    </string-array>
+    <string-array name="road_corner_entries">
+        <item>@string/road_corner_top_right</item>
+        <item>@string/road_corner_top_left</item>
+        <item>@string/road_corner_bottom_right</item>
+        <item>@string/road_corner_bottom_left</item>
+    </string-array>
+    <string-array name="road_corner_values">
+        <item>top_right</item>
+        <item>top_left</item>
+        <item>bottom_right</item>
+        <item>bottom_left</item>
+    </string-array>
+</resources>
