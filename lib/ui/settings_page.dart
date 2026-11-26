@@ -5,7 +5,6 @@ import '../backup.dart';
 import '../main.dart';
 import '../obd/bt_channel.dart';
 import '../settings.dart';
-import 'car_screen_page.dart';
 import 'vehicle_avatar.dart';
 import 'vehicle_editor.dart';
 import 'widgets.dart';
@@ -253,15 +252,6 @@ class SettingsPage extends StatelessWidget {
               unit: tr('ج.م'),
               value: s.fuelPrice,
               help: tr('السعر الرسمي بيتحط تلقائي لما تختار النوع. لو اتغير عدّله من هنا؛ كل رحلة بتتسجل بالسعر وقت بدايتها.')),
-          _Header(tr('شاشة العربية')),
-          ListTile(
-            leading: const Icon(Icons.cast),
-            title: Text(tr('Android Auto على شاشة العربية')),
-            subtitle: Text(tr('للشاشات اللي فيها CarbitLink أو QDLink، بالكابل')),
-            trailing: const Icon(Icons.chevron_left),
-            onTap: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const CarScreenPage())),
-          ),
           _Header(tr('النسخة الاحتياطية')),
           ListTile(
             leading: Icon(Icons.backup_outlined),
