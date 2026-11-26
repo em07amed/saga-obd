@@ -178,7 +178,6 @@ class AlertService {
     _last[key] = now;
     HapticFeedback.heavyImpact();
     bt.notify(title, text, sound: sound).catchError((_) {});
-    bt.carToast('$title: $text').catchError((_) {});
     if (settings.voiceAlerts && speech != null) {
       bt.speak(speech, Lang.code).catchError((_) {});
     }

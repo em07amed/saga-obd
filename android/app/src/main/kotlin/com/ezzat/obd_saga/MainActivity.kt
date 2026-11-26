@@ -44,32 +44,6 @@ class MainActivity : FlutterActivity() {
     private fun adapter(): BluetoothAdapter? =
         (getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
 
-    override fun onCreate(savedInstanceState: android.os.Bundle?) {
-        super.onCreate(savedInstanceState)
-        startCarScreenIfAttached(intent)
-    }
-
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        setIntent(intent)
-        startCarScreenIfAttached(intent)
-    }
-
-    /** Opened because the car's USB (CarbitLink/QDLink) was plugged in:
-     *  start streaming Android Auto to the car screen. */
-    private fun startCarScreenIfAttached(i: Intent?) {
-        if (i?.action != android.hardware.usb.UsbManager.ACTION_USB_ACCESSORY_ATTACHED) return
-        @Suppress("DEPRECATION")
-        val acc = i.getParcelableExtra<android.hardware.usb.UsbAccessory>(
-            android.hardware.usb.UsbManager.EXTRA_ACCESSORY) ?: return
-        try {
-            startForegroundService(
-                Intent(this, dev.caraalink.service.UsbLinkForegroundService::class.java)
-                    .setAction(dev.caraalink.service.UsbLinkForegroundService.ACTION_START_SESSION)
-                    .putExtra(android.hardware.usb.UsbManager.EXTRA_ACCESSORY, acc))
-        } catch (_: Exception) {}
-    }
-
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         val messenger = flutterEngine.dartExecutor.binaryMessenger
@@ -130,7 +104,6 @@ class MainActivity : FlutterActivity() {
                     )
                     result.success(null)
                 }
-                "nowPlaying" -> result.success(nowPlaying())
                 "setPipAllowed" -> {
                     pipAllowed = call.argument<Boolean>("allowed") ?: false
                     result.success(null)
@@ -139,35 +112,6 @@ class MainActivity : FlutterActivity() {
                     val lat = call.argument<Double>("lat")
                     val lng = call.argument<Double>("lng")
                     result.success(openGoogleMaps(lat, lng))
-                }
-                "mediaControl" -> {
-                    mediaControl(call.argument<String>("action") ?: "play_pause")
-                    result.success(null)
-                }
-                "openNotificationAccess" -> {
-                    try {
-                        startActivity(Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-                    } catch (_: Exception) {}
-                    result.success(null)
-                }
-                "contacts" -> io.execute {
-                    val list = try { contacts() } catch (_: Exception) { emptyList() }
-                    main.post { result.success(list) }
-                }
-                "call" -> {
-                    val number = call.argument<String>("number") ?: ""
-                    lastDialed = number
-                    try {
-                        startActivity(
-                            Intent(Intent.ACTION_CALL, android.net.Uri.parse("tel:" + android.net.Uri.encode(number)))
-                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        )
-                        result.success(true)
-                        // The phone app takes over the screen; come back to ours.
-                        main.postDelayed({ bringToFront() }, 1500)
-                    } catch (e: Exception) {
-                        result.error("CALL", e.message, null)
-                    }
                 }
                 "callAnswer" -> result.success(answerCall())
                 "callEnd" -> result.success(endCall())
@@ -181,46 +125,8 @@ class MainActivity : FlutterActivity() {
                     (getSystemService(Context.BATTERY_SERVICE) as android.os.BatteryManager)
                         .getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
                 } catch (_: Exception) { null })
-                // ---- car screen (AA Bridge engine) ----
-                "aaStatus" -> Thread {
-                    val snap = dev.caraalink.connection.ConnectionStateHolder.snapshot
-                    val m = mapOf(
-                        "aaInstalled" to (packageManager.getLaunchIntentForPackage(
-                            "com.google.android.projection.gearhead") != null),
-                        "server" to dev.caraalink.aa.AndroidAutoServer.isRunning(),
-                        "phase" to snap.phase.name,
-                        "link" to snap.link.name,
-                        "car" to (snap.carName ?: snap.accessoryModel),
-                        "error" to snap.lastError,
-                    )
-                    main.post { result.success(m) }
-                }.start()
-                "aaOpenSettings" -> result.success(dev.caraalink.aa.AndroidAutoServer.openSettings(this))
-                "aaStop" -> {
-                    try {
-                        startService(Intent(this, dev.caraalink.service.UsbLinkForegroundService::class.java)
-                            .setAction(dev.caraalink.service.UsbLinkForegroundService.ACTION_STOP))
-                    } catch (_: Exception) {}
-                    result.success(true)
-                }
-                "carUpdate" -> {
-                    CarData.title = call.argument<String>("title") ?: "Car OBD"
-                    CarData.waiting = call.argument<String>("waiting") ?: CarData.waiting
-                    @Suppress("UNCHECKED_CAST")
-                    CarData.rows = (call.argument<List<Map<String, Any?>>>("rows")) ?: emptyList()
-                    CarData.updatedAt = System.currentTimeMillis()
-                    result.success(null)
-                }
-                "carToast" -> {
-                    CarData.toast?.invoke(call.argument<String>("text") ?: "")
-                    result.success(null)
-                }
                 "listen" -> listen(call.argument<String>("lang") ?: "ar-EG", result)
                 "callerIdRole" -> result.success(requestCallerIdRole())
-                "mediaKey" -> {
-                    mediaKey(call.argument<String>("key") ?: "play_pause")
-                    result.success(null)
-                }
                 "launch" -> {
                     result.success(launch(call.argument<String>("kind") ?: ""))
                 }
@@ -425,108 +331,6 @@ class MainActivity : FlutterActivity() {
             return
         }
         if (ttsReady) say(text, lang) else pendingSpeech.add(text to lang)
-    }
-
-    // ---- now playing (needs notification access) ----
-
-    private fun hasNotificationAccess(): Boolean {
-        val flat = android.provider.Settings.Secure.getString(
-            contentResolver, "enabled_notification_listeners") ?: return false
-        return flat.contains(packageName)
-    }
-
-    private fun activeController(): android.media.session.MediaController? {
-        if (!hasNotificationAccess()) return null
-        return try {
-            val msm = getSystemService(Context.MEDIA_SESSION_SERVICE) as android.media.session.MediaSessionManager
-            val sessions = msm.getActiveSessions(
-                android.content.ComponentName(this, MediaListenerService::class.java))
-            sessions.firstOrNull {
-                it.playbackState?.state == android.media.session.PlaybackState.STATE_PLAYING
-            } ?: sessions.firstOrNull()
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    private fun nowPlaying(): Map<String, Any?> {
-        if (!hasNotificationAccess()) return mapOf("access" to false)
-        val c = activeController() ?: return mapOf("access" to true)
-        val md = c.metadata
-        val art = md?.getBitmap(android.media.MediaMetadata.METADATA_KEY_ALBUM_ART)
-            ?: md?.getBitmap(android.media.MediaMetadata.METADATA_KEY_ART)
-        var artBytes: ByteArray? = null
-        if (art != null) {
-            val scaled = android.graphics.Bitmap.createScaledBitmap(art, 256, 256, true)
-            val out = java.io.ByteArrayOutputStream()
-            scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, out)
-            artBytes = out.toByteArray()
-        }
-        val appName = try {
-            packageManager.getApplicationLabel(
-                packageManager.getApplicationInfo(c.packageName, 0)).toString()
-        } catch (_: Exception) { c.packageName }
-        return mapOf(
-            "access" to true,
-            "title" to md?.getString(android.media.MediaMetadata.METADATA_KEY_TITLE),
-            "artist" to (md?.getString(android.media.MediaMetadata.METADATA_KEY_ARTIST)
-                ?: md?.getString(android.media.MediaMetadata.METADATA_KEY_ALBUM_ARTIST)),
-            "app" to appName,
-            "playing" to (c.playbackState?.state == android.media.session.PlaybackState.STATE_PLAYING),
-            "art" to artBytes
-        )
-    }
-
-    private fun mediaControl(action: String) {
-        val c = activeController()
-        if (c == null) {
-            mediaKey(action)
-            return
-        }
-        val t = c.transportControls
-        when (action) {
-            "next" -> t.skipToNext()
-            "prev" -> t.skipToPrevious()
-            else -> if (c.playbackState?.state == android.media.session.PlaybackState.STATE_PLAYING) t.pause() else t.play()
-        }
-    }
-
-    // ---- contacts ----
-
-    private fun contacts(): List<Map<String, Any>> {
-        val out = mutableListOf<Map<String, Any>>()
-        val seen = HashSet<String>()
-        val uri = android.provider.ContactsContract.CommonDataKinds.Phone.CONTENT_URI
-        val cols = arrayOf(
-            android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
-            android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER,
-            android.provider.ContactsContract.CommonDataKinds.Phone.STARRED
-        )
-        contentResolver.query(uri, cols, null, null,
-            android.provider.ContactsContract.CommonDataKinds.Phone.STARRED + " DESC, " +
-                android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC"
-        )?.use { cur ->
-            while (cur.moveToNext() && out.size < 2000) {
-                val name = cur.getString(0) ?: continue
-                val number = cur.getString(1) ?: continue
-                val key = name + number.filter { it.isDigit() }.takeLast(9)
-                if (!seen.add(key)) continue
-                out.add(mapOf("name" to name, "number" to number, "starred" to (cur.getInt(2) == 1)))
-            }
-        }
-        return out
-    }
-
-    /** Play/pause/next/previous for whatever music app is playing. */
-    private fun mediaKey(key: String) {
-        val code = when (key) {
-            "next" -> android.view.KeyEvent.KEYCODE_MEDIA_NEXT
-            "prev" -> android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS
-            else -> android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
-        }
-        val am = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
-        am.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, code))
-        am.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, code))
     }
 
     /** Opens maps, the dialer, the music app or the voice assistant. */

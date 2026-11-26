@@ -5,12 +5,12 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'alerts.dart';
-import 'obd/pids.dart';
 import 'fuel/fuel_log.dart';
 import 'maintenance/maintenance.dart';
-import 'nav/nav_service.dart';
+import 'nav/place_search.dart';
 import 'road/road_service.dart';
 import 'obd/bt_channel.dart';
 import 'obd/obd_service.dart';
@@ -36,7 +36,7 @@ class App {
   static late final MaintenanceService maintenance;
   static late final FuelLogService fuel;
   static late final AlertService alerts;
-  static late final NavService nav;
+  static late final PlaceSearch places;
   static late final RoadService road;
 }
 
@@ -56,55 +56,11 @@ Future<void> main() async {
   await App.maintenance.load();
   App.fuel = FuelLogService(App.db, App.settings, App.obd, App.trips);
   await App.fuel.load();
-  App.nav = NavService(App.obd.bt);
+  App.places = PlaceSearch();
   App.road = RoadService(App.obd.bt, App.settings, App.obd);
   App.alerts = AlertService(
       App.obd, App.settings, App.maintenance, App.obd.bt, App.road);
-  // Feed the Android Auto screen every 2 s.
-  Timer.periodic(const Duration(seconds: 2), (_) => _pushToCar());
   runApp(CarObdApp());
-}
-
-void _pushToCar() {
-  final o = App.obd;
-  final v = o.values;
-  String n(double? x, [int d = 0]) => x == null ? '--' : x.toStringAsFixed(d);
-  final coolant = v[Pids.coolant];
-  final litres = App.fuel.litresNow;
-  final avg = App.fuel.realAvgL100 ?? App.settings.defaultL100;
-  final odo = App.maintenance.odometerKm;
-  final limit = App.road.effectiveLimit;
-  final speed = v[Pids.speed];
-  App.obd.bt.carUpdate({
-    'title': '${App.settings.vehicle.name} • ${o.status}',
-    'waiting': tr('افتح Car OBD على الموبايل واتصل بالعربية'),
-    'rows': [
-      {
-        'title': tr('السرعة ${n(speed)} كم/س'),
-        'text': tr('الحد ${limit.round()} • RPM ${n(v[Pids.rpm])}'),
-        'warn': speed != null && speed > limit,
-      },
-      {
-        'title': tr('حرارة الموتور ${n(coolant)}°C'),
-        'text': '',
-        'warn': coolant != null && coolant >= App.settings.coolantAlert,
-      },
-      {
-        'title': tr('البنزين ${n(litres)} لتر'),
-        'text': litres == null
-            ? tr('سجّل تفويلة عشان نحسب الباقي')
-            : tr('يكفي حوالي ${(litres / avg * 100).round()} كم'),
-        'warn': litres != null && litres < 6,
-      },
-      {
-        'title': tr('العداد ${n(odo)} كم'),
-        'text': App.road.nextCameraM != null && App.road.nextCameraM! < 1000
-            ? tr('رادار بعد ${App.road.nextCameraM!.round()} متر')
-            : '',
-        'warn': false,
-      },
-    ],
-  }).catchError((_) {});
 }
 
 class CarObdApp extends StatelessWidget {
@@ -180,6 +136,13 @@ class _HomeShellState extends State<HomeShell> {
     }
     if (App.settings.autoConnect && App.settings.deviceAddress != null) {
       unawaited(App.obd.connect());
+    }
+    // Once: let the incoming-call card show who's calling.
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool('askedCallerId') != true) {
+      await prefs.setBool('askedCallerId', true);
+      await Permission.phone.request();
+      await App.obd.bt.requestCallerId().catchError((_) => false);
     }
   }
 

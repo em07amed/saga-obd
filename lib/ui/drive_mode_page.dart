@@ -101,12 +101,6 @@ class _DriveModePageState extends State<DriveModePage> {
 
     final v = App.obd.values;
 
-    // Stop navigation.
-    if (has(['وقف الملاحه', 'انهي الملاحه', 'الغي الملاحه', 'stop navigation'])) {
-      App.nav.stop();
-      _say(tr('وقفت الملاحة'));
-      return;
-    }
     // Navigate somewhere.
     const goWords = ['وديني', 'ودينى', 'خدني', 'عايز اروح', 'روح', 'navigate to', 'take me to', 'go to'];
     if (has(goWords)) {
@@ -114,7 +108,7 @@ class _DriveModePageState extends State<DriveModePage> {
       if (dest.isEmpty) return _say(tr('قول اسم المكان بعد وديني'));
       final p = await Geolocator.getLastKnownPosition().catchError((_) => null);
       try {
-        final r = await App.nav
+        final r = await App.places
             .search(dest, p == null ? null : LatLng(p.latitude, p.longitude));
         if (r.isEmpty) return _say(tr('ما لقيتش $dest'));
         _say(tr('رايحين على ${r.first.name}'));
@@ -154,7 +148,6 @@ class _DriveModePageState extends State<DriveModePage> {
 
   /// Hand the trip to Google Maps; this app floats on top with the gauges.
   Future<void> _googleMaps([LatLng? to]) async {
-    App.nav.stop(); // avoid two voices giving directions
     final ok = await App.obd.bt
         .openGoogleMaps(to?.latitude, to?.longitude)
         .catchError((_) => false);

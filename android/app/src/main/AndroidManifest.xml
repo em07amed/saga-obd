@@ -1,12 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Car screen (CarbitLink / QDLink) via the AA Bridge engine, cable -->
-    <uses-feature android:name="android.hardware.usb.accessory" android:required="false" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
-    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-
     <!-- Bluetooth: legacy (Android 11 and below) -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
@@ -25,10 +18,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- In-app phone: favourites and direct calls -->
+    <!-- Incoming-call card: caller name, answer / end -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
-    <uses-permission android:name="android.permission.CALL_PHONE" />
-    <!-- Show / answer / end calls from the drive screen -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
@@ -65,35 +56,7 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Plugging into a CarbitLink / QDLink car opens us and starts the car screen -->
-            <intent-filter>
-                <action android:name="android.hardware.usb.action.USB_ACCESSORY_ATTACHED" />
-            </intent-filter>
-            <meta-data
-                android:name="android.hardware.usb.action.USB_ACCESSORY_ATTACHED"
-                android:resource="@xml/accessory_filter" />
         </activity>
-        <!-- AA Bridge engine: streams Android Auto to the car screen over USB -->
-        <service
-            android:name="dev.caraalink.service.UsbLinkForegroundService"
-            android:exported="false"
-            android:foregroundServiceType="connectedDevice|microphone|location" />
-
-        <!-- Live readings on the car screen through Android Auto -->
-        <service
-            android:name=".CarObdService"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="androidx.car.app.CarAppService" />
-                <category android:name="androidx.car.app.category.IOT" />
-            </intent-filter>
-        </service>
-        <meta-data
-            android:name="com.google.android.gms.car.application"
-            android:resource="@xml/automotive_app_desc" />
-        <meta-data
-            android:name="androidx.car.app.minCarApiLevel"
-            android:value="1" />
         <!-- Caller ID only (user grants the "call screening" role); never blocks calls -->
         <service
             android:name=".CallerIdService"
@@ -113,7 +76,6 @@
     </application>
 
     <queries>
-        <package android:name="com.google.android.projection.gearhead" />
         <intent>
             <action android:name="android.speech.RecognitionService" />
         </intent>
