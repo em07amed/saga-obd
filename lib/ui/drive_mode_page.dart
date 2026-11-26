@@ -19,7 +19,6 @@ import '../nav/nav_service.dart';
 import 'drive_panels.dart';
 import 'map_tiles.dart';
 import 'vehicle_avatar.dart';
-import 'sport_theme.dart';
 import 'widgets.dart';
 import '../l10n.dart';
 import 'readings_page.dart' show DtcPage;
@@ -974,7 +973,7 @@ class _DriveModePageState extends State<DriveModePage> {
                     style: TextStyle(
                         color: over ? const Color(0xFFFF3B30) : Colors.white,
                         fontWeight: FontWeight.w900,
-                        fontStyle: FontStyle.italic)),
+                        fontStyle: FontStyle.normal)),
               ),
             ),
             Expanded(
@@ -1065,9 +1064,7 @@ class _DriveModePageState extends State<DriveModePage> {
                               fontSize: size,
                               height: 1.1,
                               fontWeight: FontWeight.w900,
-                              fontStyle: isSport(context)
-                                  ? FontStyle.italic
-                                  : FontStyle.normal,
+                              fontStyle: FontStyle.normal,
                               color: color)),
                     ),
                     Text(unit,

@@ -61,12 +61,6 @@ class DashboardPage extends StatelessWidget {
                     max: 7000,
                     redFrom: 6000),
                 Gauge(
-                    label: tr('السرعة'),
-                    unit: tr('كم/س'),
-                    value: v[Pids.speed],
-                    min: 0,
-                    max: 200),
-                Gauge(
                     label: tr('حرارة المياه'),
                     unit: '°C',
                     value: coolant,
@@ -154,12 +148,37 @@ class DashboardPage extends StatelessWidget {
                     : c.maxWidth > 600
                         ? 4
                         : 2;
-                return GridView.count(
-                  padding: EdgeInsets.fromLTRB(8, 8, 8, 88),
-                  crossAxisCount: cols,
-                  childAspectRatio: 1.05,
-                  children: tiles,
-                );
+                final heroSize = (c.maxWidth * 0.86).clamp(220.0, 380.0);
+                return CustomScrollView(slivers: [
+                  // Big icon-style speedometer up top.
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+                      child: Center(
+                        child: SizedBox(
+                          width: heroSize,
+                          height: heroSize + 18,
+                          child: Gauge(
+                            hero: true,
+                            label: tr('السرعة'),
+                            unit: tr('كم/س'),
+                            value: v[Pids.speed],
+                            min: 0,
+                            max: 220,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(8, 8, 8, 88),
+                    sliver: SliverGrid.count(
+                      crossAxisCount: cols,
+                      childAspectRatio: 1.05,
+                      children: tiles,
+                    ),
+                  ),
+                ]);
               });
             },
           ),

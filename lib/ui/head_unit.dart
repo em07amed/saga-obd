@@ -1,10 +1,13 @@
 part of 'drive_mode_page.dart';
 
-// Head-unit look for drive mode: dark navy, glassy cards, red accents.
-const _huBg = Color(0xFF0E141B);
-const _huCard = Color(0xFF16202A);
+// Head-unit look for drive mode: black, glassy cards, glowing amber accents.
+const _huBg = Color(0xFF000000);
+const _huCard = Color(0xFF0E0E0F);
 const _huLine = Color(0x22FFFFFF);
-const _huRed = Color(0xFFE53935);
+const _huRed = Color(0xFFFF453A);
+
+/// Glowing amber accent, same as the app icon.
+const _huAccent = Color(0xFFFF9904);
 const _huMuted = Color(0xFF9AA7B4);
 
 BoxDecoration _huBox({Gradient? gradient, Color? border}) => BoxDecoration(
@@ -138,7 +141,7 @@ class _HeadStatusBarState extends State<_HeadStatusBar> {
         Expanded(
           child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
             Icon(connected ? Icons.bluetooth_connected : Icons.bluetooth,
-                color: connected ? const Color(0xFF64B5F6) : _huMuted),
+                color: connected ? _huAccent : _huMuted),
             const SizedBox(width: 14),
             if (b != null) ...[
               Icon(
@@ -193,11 +196,11 @@ class _HeadNav extends StatelessWidget {
                   ? const LinearGradient(
                       begin: Alignment.bottomCenter,
                       end: Alignment.topCenter,
-                      colors: [Color(0x55E53935), Color(0x00E53935)])
+                      colors: [Color(0x55FF9904), Color(0x00FF9904)])
                   : null,
               border: Border(
                   bottom: BorderSide(
-                      color: active ? _huRed : Colors.transparent, width: 3)),
+                      color: active ? _huAccent : Colors.transparent, width: 3)),
             ),
             child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
               Icon(icon, size: 28, color: active ? Colors.white : _huMuted),
@@ -218,7 +221,7 @@ class _HeadNav extends StatelessWidget {
     return Container(
       height: 76,
       decoration: const BoxDecoration(
-        color: Color(0xFF111A23),
+        color: Color(0xFF0A0A0B),
         border: Border(top: BorderSide(color: _huLine)),
       ),
       child: Row(children: [
@@ -282,8 +285,8 @@ class _HeadMediaCard extends StatelessWidget {
         gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF8E1F27), Color(0xFF4A1217)]),
-        border: const Color(0x66FF5252),
+            colors: [Color(0xFF6B3E00), Color(0xFF241500)]),
+        border: const Color(0x66FF9904),
       ),
       padding: const EdgeInsets.all(14),
       child: Column(children: [
@@ -330,7 +333,7 @@ class _HeadMediaCard extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 6),
             child: Row(children: [
-              const Icon(Icons.circle, color: _huRed, size: 10),
+              const Icon(Icons.circle, color: _huAccent, size: 10),
               const SizedBox(width: 6),
               Text(tr('مباشر'), style: const TextStyle(color: Colors.white70)),
               const SizedBox(width: 8),

@@ -87,7 +87,9 @@ class ConnectionBar extends StatelessWidget {
   }
 }
 
-/// Arc gauge (240°) with a red zone.
+/// Arc gauge with a red zone. In the default (sport) theme it is drawn like
+/// the app icon: a glowing amber arc, white major ticks with numbers, amber
+/// minor ticks, and a big upright number in a dark centre disc.
 class Gauge extends StatelessWidget {
   final String label;
   final String unit;
@@ -96,6 +98,9 @@ class Gauge extends StatelessWidget {
   final double max;
   final double? redFrom;
   final int decimals;
+
+  /// Full-size hero gauge: no card, bigger number and labels.
+  final bool hero;
 
   const Gauge({
     super.key,
@@ -106,57 +111,257 @@ class Gauge extends StatelessWidget {
     required this.max,
     this.redFrom,
     this.decimals = 0,
+    this.hero = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final sport = isSport(context);
     final v = value;
     final hot = v != null && redFrom != null && v >= redFrom!;
+    final fraction =
+        v == null ? 0.0 : ((v - min) / (max - min)).clamp(0.0, 1.0);
+    final accent = hot ? AppColors.danger(context) : scheme.primary;
+
+    final number = FittedBox(
+      child: Text(fmt(v, decimals),
+          textDirection: TextDirection.ltr,
+          style: TextStyle(
+              fontSize: hero ? 72 : 34,
+              height: 1.0,
+              letterSpacing: hero ? -2 : -0.5,
+              fontWeight: sport ? FontWeight.w600 : FontWeight.bold,
+              color: hot
+                  ? AppColors.danger(context)
+                  : sport
+                      ? Colors.white
+                      : null)),
+    );
+    final unitText = Text(unit,
+        style: sport
+            ? TextStyle(
+                fontSize: hero ? 15 : 11,
+                fontWeight: FontWeight.w600,
+                color: accent)
+            : Theme.of(context).textTheme.bodySmall);
+
+    final dial = CustomPaint(
+      painter: sport
+          ? _GlowGaugePainter(
+              fraction: fraction,
+              min: min,
+              max: max,
+              redFraction:
+                  redFrom == null ? null : (redFrom! - min) / (max - min),
+              accent: accent,
+              danger: AppColors.danger(context),
+              hero: hero,
+            )
+          : _GaugePainter(
+              fraction: fraction,
+              redFraction:
+                  redFrom == null ? null : (redFrom! - min) / (max - min),
+              track: scheme.outlineVariant,
+              fill: accent,
+              danger: AppColors.danger(context),
+            ),
+      child: Center(
+        child: FractionallySizedBox(
+          widthFactor: sport ? 0.5 : 0.7,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              number,
+              unitText,
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (hero) {
+      return Column(children: [
+        Expanded(child: AspectRatio(aspectRatio: 1, child: dial)),
+        Text(label,
+            style: TextStyle(
+                fontSize: 13,
+                letterSpacing: 1.5,
+                color: scheme.onSurfaceVariant)),
+      ]);
+    }
+
     return Card(
       child: Padding(
         padding: EdgeInsets.all(8),
         child: Column(
           children: [
             Text(label, style: Theme.of(context).textTheme.labelLarge),
-            Expanded(
-              child: CustomPaint(
-                painter: _GaugePainter(
-                  fraction: v == null ? 0 : ((v - min) / (max - min)).clamp(0.0, 1.0),
-                  redFraction:
-                      redFrom == null ? null : (redFrom! - min) / (max - min),
-                  track: scheme.outlineVariant,
-                  fill: hot ? AppColors.danger(context) : scheme.primary,
-                  danger: AppColors.danger(context),
-                  segmented: isSport(context),
-                ),
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      FittedBox(
-                        child: Text(fmt(v, decimals),
-                            style: TextStyle(
-                                fontSize: 34,
-                                fontWeight: isSport(context)
-                                    ? FontWeight.w900
-                                    : FontWeight.bold,
-                                fontStyle: isSport(context)
-                                    ? FontStyle.italic
-                                    : FontStyle.normal,
-                                color: hot ? AppColors.danger(context) : null)),
-                      ),
-                      Text(unit, style: Theme.of(context).textTheme.bodySmall),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+            Expanded(child: dial),
           ],
         ),
       ),
     );
   }
+}
+
+/// Icon-style dial: 270° glowing arc on a dark disc with tick marks.
+class _GlowGaugePainter extends CustomPainter {
+  final double fraction;
+  final double min;
+  final double max;
+  final double? redFraction;
+  final Color accent;
+  final Color danger;
+  final bool hero;
+
+  _GlowGaugePainter({
+    required this.fraction,
+    required this.min,
+    required this.max,
+    required this.redFraction,
+    required this.accent,
+    required this.danger,
+    required this.hero,
+  });
+
+  static const _start = math.pi * 135 / 180;
+  static const _sweep = math.pi * 270 / 180;
+
+  /// A tidy major step giving 6–12 labelled ticks.
+  double get _step {
+    final span = max - min;
+    for (final s in [5.0, 10, 20, 25, 50, 100, 250, 500, 1000, 2000]) {
+      if (span / s <= 12) return s.toDouble();
+    }
+    return span / 10;
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = size.center(Offset.zero);
+    final r = math.min(size.width, size.height) / 2 - (hero ? 10 : 5);
+    final w = hero ? 9.0 : 5.0;
+    final rect = Rect.fromCircle(center: c, radius: r);
+    Offset at(double a, double rad) =>
+        c + Offset(math.cos(a), math.sin(a)) * rad;
+
+    // Dark radial disc behind everything.
+    canvas.drawCircle(
+        c,
+        r - w,
+        Paint()
+          ..shader = RadialGradient(colors: const [
+            Color(0xFF1C1C1E),
+            Color(0xFF0A0A0B),
+            Color(0xFF000000),
+          ], stops: const [0, 0.7, 1])
+              .createShader(Rect.fromCircle(center: c, radius: r)));
+
+    // Inner hairline ring around the number.
+    canvas.drawCircle(
+        c,
+        r * 0.52,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1
+          ..color = const Color(0x33FFFFFF));
+
+    // Track.
+    final arc = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = w
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(rect, _start, _sweep, false,
+        arc..color = const Color(0xFF151517));
+    final rf = redFraction;
+    if (rf != null && rf < 1) {
+      canvas.drawArc(rect, _start + _sweep * rf, _sweep * (1 - rf), false,
+          arc..color = danger.withValues(alpha: 0.22));
+    }
+
+    // Glow + fill + bright tip.
+    if (fraction > 0.002) {
+      final sweep = _sweep * fraction;
+      canvas.drawArc(
+          rect,
+          _start,
+          sweep,
+          false,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = w * 1.8
+            ..strokeCap = StrokeCap.round
+            ..color = accent.withValues(alpha: 0.55)
+            ..maskFilter = MaskFilter.blur(BlurStyle.normal, w * 1.4));
+      canvas.drawArc(
+          rect,
+          _start,
+          sweep,
+          false,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = w
+            ..strokeCap = StrokeCap.round
+            ..shader = SweepGradient(
+              startAngle: 0,
+              endAngle: math.pi * 2,
+              colors: [accent, Color.lerp(accent, Colors.white, 0.15)!],
+              transform: GradientRotation(_start),
+            ).createShader(rect));
+      final tip = at(_start + sweep, r);
+      canvas.drawCircle(
+          tip,
+          w * 0.85,
+          Paint()
+            ..color = const Color(0xFFFFE55D)
+            ..maskFilter = MaskFilter.blur(BlurStyle.normal, w * 0.6));
+      canvas.drawCircle(tip, w * 0.55, Paint()..color = const Color(0xFFFFF3B0));
+    }
+
+    // Ticks and labels.
+    final step = _step;
+    final minor = step / 5;
+    final tickOuter = r - w - (hero ? 8 : 4);
+    final tick = Paint()..strokeCap = StrokeCap.round;
+    final n = ((max - min) / minor).round();
+    final labels = r > 60;
+    for (var i = 0; i <= n; i++) {
+      final val = min + i * minor;
+      final f = (val - min) / (max - min);
+      final a = _start + _sweep * f;
+      final major = i % 5 == 0;
+      final red = rf != null && f >= rf;
+      tick
+        ..strokeWidth = major ? (hero ? 2.6 : 1.8) : (hero ? 1.2 : 0.9)
+        ..color = major
+            ? (red ? danger : Colors.white)
+            : (red ? danger : accent).withValues(alpha: f <= fraction ? 0.95 : 0.45);
+      final len = major ? (hero ? 16.0 : 8.0) : (hero ? 8.0 : 4.0);
+      canvas.drawLine(at(a, tickOuter), at(a, tickOuter - len), tick);
+
+      if (major && labels) {
+        final text = val >= 1000 && step >= 500
+            ? (val / 1000).toStringAsFixed(val % 1000 == 0 ? 0 : 1)
+            : val.toStringAsFixed(0);
+        final tp = TextPainter(
+          text: TextSpan(
+              text: text,
+              style: TextStyle(
+                  color: red ? danger : Colors.white,
+                  fontSize: hero ? 14 : 9,
+                  fontWeight: FontWeight.w600)),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        final p = at(a, tickOuter - len - (hero ? 18 : 10));
+        tp.paint(canvas, p - Offset(tp.width / 2, tp.height / 2));
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_GlowGaugePainter old) =>
+      old.fraction != fraction || old.accent != accent || old.hero != hero;
 }
 
 class _GaugePainter extends CustomPainter {
@@ -165,7 +370,6 @@ class _GaugePainter extends CustomPainter {
   final Color track;
   final Color fill;
   final Color danger;
-  final bool segmented;
 
   _GaugePainter({
     required this.fraction,
@@ -173,7 +377,6 @@ class _GaugePainter extends CustomPainter {
     required this.track,
     required this.fill,
     required this.danger,
-    this.segmented = false,
   });
 
   static const _start = math.pi * 150 / 180;
@@ -181,7 +384,6 @@ class _GaugePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (segmented) return _paintSegments(canvas, size);
     final r = math.min(size.width, size.height) / 2 - 8;
     final rect = Rect.fromCircle(center: size.center(Offset.zero), radius: r);
     final base = Paint()
@@ -201,39 +403,9 @@ class _GaugePainter extends CustomPainter {
     }
   }
 
-  /// Sport style: a ring of short blocks that light up, red past redline.
-  void _paintSegments(Canvas canvas, Size size) {
-    const n = 32;
-    final c = size.center(Offset.zero);
-    final r = math.min(size.width, size.height) / 2 - 4;
-    final rf = redFraction ?? 2;
-    final p = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.butt;
-    for (var i = 0; i < n; i++) {
-      final f0 = i / n;
-      final a = _start + _sweep * (i + 0.5) / n;
-      final lit = f0 < fraction;
-      final red = f0 >= rf;
-      p
-        ..strokeWidth = i % 4 == 0 ? 4 : 3
-        ..color = lit
-            ? (red ? danger : fill)
-            : (red ? danger.withValues(alpha: 0.25) : track);
-      final inner = r - (i % 4 == 0 ? 16 : 11);
-      canvas.drawLine(
-        c + Offset(math.cos(a), math.sin(a)) * inner,
-        c + Offset(math.cos(a), math.sin(a)) * r,
-        p,
-      );
-    }
-  }
-
   @override
   bool shouldRepaint(_GaugePainter old) =>
-      old.fraction != fraction ||
-      old.fill != fill ||
-      old.segmented != segmented;
+      old.fraction != fraction || old.fill != fill;
 }
 
 /// Plain number tile with optional subtitle.
@@ -289,10 +461,8 @@ class StatTile extends StatelessWidget {
                     text: value,
                     style: t.headlineMedium?.copyWith(
                         fontWeight:
-                            isSport(context) ? FontWeight.w900 : FontWeight.bold,
-                        fontStyle: isSport(context)
-                            ? FontStyle.italic
-                            : FontStyle.normal,
+                            isSport(context) ? FontWeight.w600 : FontWeight.bold,
+                        fontStyle: FontStyle.normal,
                         color: color)),
                 if (unit != null) TextSpan(text: ' $unit', style: t.bodyMedium),
               ])),
