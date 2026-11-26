@@ -227,14 +227,18 @@ class _HeadNav extends StatelessWidget {
       child: Row(children: [
         item(Icons.home_outlined, tr('الرئيسية'), () => onPanel(_Panel.home),
             active: current == _Panel.home),
-        item(Icons.music_note_outlined, tr('الموسيقى'),
-            () => onPanel(_Panel.music),
-            active: current == _Panel.music),
         item(Icons.directions_car_outlined, tr('حالة العربية'),
             () => onPanel(_Panel.gauges),
             active: current == _Panel.gauges),
-        item(Icons.call_outlined, tr('الهاتف'), () => onPanel(_Panel.phone),
-            active: current == _Panel.phone),
+        item(Icons.warning_amber_outlined, tr('الأعطال'),
+            () => onPanel(_Panel.faults),
+            active: current == _Panel.faults),
+        item(Icons.build_outlined, tr('الصيانة'),
+            () => onPanel(_Panel.maintenance),
+            active: current == _Panel.maintenance),
+        item(Icons.route_outlined, tr('الرحلات'),
+            () => onPanel(_Panel.trips),
+            active: current == _Panel.trips),
         item(listening ? Icons.mic : Icons.mic_none, tr('المساعد'), onVoice,
             active: listening,
             onLongPress: () => App.obd.bt.launch('assistant')),
@@ -243,27 +247,32 @@ class _HeadNav extends StatelessWidget {
   }
 }
 
-/// Now playing: media keys for whatever music app is playing on the phone.
-class _HeadMediaCard extends StatelessWidget {
+/// Current trip: distance, fuel, cost and average; tap for the trip list.
+class _HeadTripCard extends StatelessWidget {
   final VoidCallback onOpen;
-  const _HeadMediaCard({required this.onOpen});
+  const _HeadTripCard({required this.onOpen});
 
   @override
   Widget build(BuildContext context) {
-    final bt = App.obd.bt;
-    Widget ctl(IconData i, VoidCallback f, {bool big = false}) => Material(
-          color: Colors.white.withValues(alpha: big ? 0.18 : 0.10),
-          borderRadius: BorderRadius.circular(12),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: () {
-              HapticFeedback.selectionClick();
-              f();
-            },
-            child: SizedBox(
-                width: big ? 60 : 50,
-                height: big ? 56 : 48,
-                child: Icon(i, color: Colors.white, size: big ? 34 : 28)),
+    final t = App.trips;
+    final s = App.settings;
+    Widget stat(String value, String unit) => Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              FittedBox(
+                child: Text(value,
+                    textDirection: TextDirection.ltr,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 26,
+                        fontWeight: FontWeight.w600)),
+              ),
+              Text(unit,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: _huAccent, fontSize: 12)),
+            ],
           ),
         );
     return Container(
@@ -271,58 +280,45 @@ class _HeadMediaCard extends StatelessWidget {
         gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF6B3E00), Color(0xFF241500)]),
+            colors: [Color(0xFF3A2200), Color(0xFF120A00)]),
         border: const Color(0x66FF9904),
       ),
       padding: const EdgeInsets.all(14),
-      child: Column(children: [
-        Expanded(
-          child: InkWell(
-            onTap: onOpen,
-            child: Row(children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                    width: 64,
-                    height: 64,
-                    color: Colors.black26,
-                    child: const Center(
-                        child: Icon(Icons.music_note,
-                            color: Colors.white70, size: 34))),
-              ),
-              const SizedBox(width: 12),
+      child: InkWell(
+        onTap: onOpen,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              const Icon(Icons.route, color: _huAccent, size: 20),
+              const SizedBox(width: 6),
               Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(tr('الموسيقى'),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold)),
-                    Text(tr('التطبيق اللي شغال على الموبايل'),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white70)),
-                  ],
-                ),
+                child: Text(
+                    t.active ? tr('الرحلة الحالية') : tr('مفيش رحلة شغالة'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold)),
               ),
+              const Icon(Icons.chevron_left, color: _huMuted),
             ]),
-          ),
+            Expanded(
+              child: t.active
+                  ? Row(children: [
+                      stat(fmt(t.distanceKm, 1), tr('كم')),
+                      stat(fmt(t.fuelL, 2), tr('لتر')),
+                      stat(fmt(t.fuelL * s.fuelPrice), tr('ج.م')),
+                      stat(fmt(t.avgL100, 1), tr('ل/100كم')),
+                    ])
+                  : Center(
+                      child: Text(tr('هتبدأ لوحدها لما الموتور يدور'),
+                          style: const TextStyle(color: _huMuted))),
+            ),
+          ],
         ),
-        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          ctl(Icons.skip_previous, () => bt.mediaKey('prev').catchError((_) {})),
-          const SizedBox(width: 12),
-          ctl(Icons.play_arrow,
-              () => bt.mediaKey('play_pause').catchError((_) {}),
-              big: true),
-          const SizedBox(width: 12),
-          ctl(Icons.skip_next, () => bt.mediaKey('next').catchError((_) {})),
-        ]),
-      ]),
+      ),
     );
   }
 }

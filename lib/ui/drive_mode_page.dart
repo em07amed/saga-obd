@@ -4,7 +4,6 @@ import 'package:http/http.dart' as http;
 
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart' show LatLng;
 import 'package:flutter/services.dart';
@@ -13,7 +12,8 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../main.dart';
 import '../obd/bt_channel.dart';
 import '../obd/pids.dart';
-import 'drive_panels.dart';
+import 'maintenance_page.dart';
+import 'trips_page.dart';
 import 'vehicle_avatar.dart';
 import 'widgets.dart';
 import '../l10n.dart';
@@ -29,7 +29,7 @@ class DriveModePage extends StatefulWidget {
   State<DriveModePage> createState() => _DriveModePageState();
 }
 
-enum _Panel { home, gauges, music, phone }
+enum _Panel { home, gauges, faults, maintenance, trips }
 
 class _DriveModePageState extends State<DriveModePage> {
   _Panel _panel = _Panel.home;
@@ -124,40 +124,6 @@ class _DriveModePageState extends State<DriveModePage> {
       }
       return;
     }
-    // Answer / hang up the current call.
-    final pc = BtChannel.phoneCall.value;
-    if (pc.ringing && has(['رد', 'افتح', 'answer'])) {
-      await App.obd.bt.answerCall();
-      return;
-    }
-    if (!pc.idle && has(['اقفل', 'ارفض', 'انهي', 'end call', 'hang up', 'decline'])) {
-      await App.obd.bt.endCall();
-      return;
-    }
-    // Call someone.
-    const callWords = ['اتصل ب', 'اتصل على', 'كلم', 'call '];
-    if (has(callWords)) {
-      final who = _norm(after(callWords));
-      if (who.isEmpty) return _say(tr('قول الاسم بعد اتصل'));
-      if (!(await Permission.contacts.request()).isGranted) return;
-      final all = await App.obd.bt.contacts().catchError((_) => <Contact>[]);
-      Contact? hit;
-      for (final c in all) {
-        final n = _norm(c.name);
-        if (n == who) {
-          hit = c;
-          break;
-        }
-        if (hit == null && (n.contains(who) || who.contains(n))) hit = c;
-      }
-      if (hit == null) return _say(tr('مش لاقي ${after(callWords)} في الأسماء'));
-      _say(tr('بتصل بـ ${hit.name}'));
-      if ((await Permission.phone.request()).isGranted) {
-        await Future<void>.delayed(const Duration(milliseconds: 1500));
-        await App.obd.bt.call(hit.number).catchError((_) {});
-      }
-      return;
-    }
     // Readings.
     if (has(['السرعه', 'سرعتي', 'speed'])) {
       return _say(tr('سرعتك ${fmt(v[Pids.speed])} كيلو'));
@@ -179,9 +145,11 @@ class _DriveModePageState extends State<DriveModePage> {
     }
     // Panels.
     if (has(['العدادات', 'gauges'])) return _show(_Panel.gauges);
-    if (has(['الموسيقي', 'الاغاني', 'music'])) return _show(_Panel.music);
+    if (has(['الاعطال', 'عطل', 'faults', 'codes'])) return _show(_Panel.faults);
+    if (has(['الصيانه', 'maintenance'])) return _show(_Panel.maintenance);
+    if (has(['الرحلات', 'الرحله', 'trips', 'trip'])) return _show(_Panel.trips);
 
-    _say(tr('مش فاهم. جرّب: وديني على مكان، اتصل بحد، أو السرعة كام'));
+    _say(tr('مش فاهم. جرّب: وديني على مكان، الأعطال، الصيانة، الرحلات، أو السرعة كام'));
   }
 
   /// Hand the trip to Google Maps; this app floats on top with the gauges.
@@ -200,23 +168,19 @@ class _DriveModePageState extends State<DriveModePage> {
 
   Widget _dashboard(BuildContext context) {
     return Column(children: [
-      Expanded(child: _HeadMediaCard(onOpen: () => _show(_Panel.music))),
+      Expanded(
+          flex: 3,
+          child: _HeadCarCard(onOpen: () => _show(_Panel.gauges))),
       const SizedBox(height: 12),
-      Expanded(child: _HeadCarCard(onOpen: () => _show(_Panel.gauges))),
+      Expanded(
+          flex: 2,
+          child: _HeadTripCard(onOpen: () => _show(_Panel.trips))),
     ]);
   }
 
   @override
   void initState() {
     super.initState();
-    // Needed to show who's calling and to answer / hang up from here.
-    Permission.phone.request().then((_) async {
-      final p = await SharedPreferences.getInstance();
-      if (p.getBool('askedCallerId') != true) {
-        await p.setBool('askedCallerId', true);
-        await App.obd.bt.requestCallerId().catchError((_) => false);
-      }
-    });
     SystemChrome.setPreferredOrientations(
         [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
@@ -477,10 +441,12 @@ class _DriveModePageState extends State<DriveModePage> {
                           flex: 4,
                           child: _panel == _Panel.home
                               ? _dashboard(context)
-                              : _panel == _Panel.music
-                                  ? const MusicPanel()
-                                  : _panel == _Panel.phone
-                                      ? const PhonePanel()
+                              : _panel == _Panel.faults
+                                  ? const _Embedded(DtcPage())
+                                  : _panel == _Panel.maintenance
+                                      ? const _Embedded(MaintenancePage())
+                                  : _panel == _Panel.trips
+                                      ? const _Embedded(TripsPage())
                                       : Column(
                             children: [
                               Expanded(
@@ -564,3 +530,18 @@ class _DriveModePageState extends State<DriveModePage> {
   }
 }
 
+/// Shows a normal app page inside a drive-mode panel. It gets its own
+/// navigator, so its back button and sub-pages stay inside the panel
+/// instead of closing drive mode.
+class _Embedded extends StatelessWidget {
+  final Widget page;
+  const _Embedded(this.page);
+
+  @override
+  Widget build(BuildContext context) => ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Navigator(
+          onGenerateRoute: (_) => MaterialPageRoute(builder: (_) => page),
+        ),
+      );
+}
