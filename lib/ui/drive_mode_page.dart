@@ -1,10 +1,8 @@
-import 'dart:math' as math;
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:geolocator/geolocator.dart';
@@ -15,9 +13,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../main.dart';
 import '../obd/bt_channel.dart';
 import '../obd/pids.dart';
-import '../nav/nav_service.dart';
 import 'drive_panels.dart';
-import 'map_tiles.dart';
 import 'vehicle_avatar.dart';
 import 'widgets.dart';
 import '../l10n.dart';
@@ -33,35 +29,12 @@ class DriveModePage extends StatefulWidget {
   State<DriveModePage> createState() => _DriveModePageState();
 }
 
-enum _Panel { home, gauges, map, music, radio, phone }
+enum _Panel { home, gauges, music, phone }
 
 class _DriveModePageState extends State<DriveModePage> {
   _Panel _panel = _Panel.home;
-  bool get _map => _panel == _Panel.map || _panel == _Panel.home;
-  final _search = TextEditingController();
-  List<Place>? _results;
-  bool _searching = false;
-
   void _show(_Panel p, {bool toggle = false}) {
     setState(() => _panel = toggle && _panel == p ? _Panel.home : p);
-    if (p == _Panel.map || p == _Panel.home) _startGps();
-  }
-
-  Future<void> _doSearch(String q) async {
-    if (q.trim().isEmpty) return;
-    setState(() => _searching = true);
-    try {
-      final p = _pos;
-      final r = await App.nav
-          .search(q, p == null ? null : LatLng(p.latitude, p.longitude));
-      if (mounted) setState(() => _results = r);
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(tr('البحث محتاج نت'))));
-      }
-    }
-    if (mounted) setState(() => _searching = false);
   }
 
   // ---------- voice commands ----------
@@ -139,14 +112,13 @@ class _DriveModePageState extends State<DriveModePage> {
     if (has(goWords)) {
       final dest = after(goWords);
       if (dest.isEmpty) return _say(tr('قول اسم المكان بعد وديني'));
-      _show(_Panel.map);
-      final p = _pos;
+      final p = await Geolocator.getLastKnownPosition().catchError((_) => null);
       try {
         final r = await App.nav
             .search(dest, p == null ? null : LatLng(p.latitude, p.longitude));
         if (r.isEmpty) return _say(tr('ما لقيتش $dest'));
         _say(tr('رايحين على ${r.first.name}'));
-        await _go(r.first);
+        await _googleMaps(r.first.at);
       } catch (_) {
         _say(tr('البحث محتاج نت'));
       }
@@ -158,7 +130,7 @@ class _DriveModePageState extends State<DriveModePage> {
       await App.obd.bt.answerCall();
       return;
     }
-    if (!pc.idle && !has(['راديو']) && has(['اقفل', 'ارفض', 'انهي', 'end call', 'hang up', 'decline'])) {
+    if (!pc.idle && has(['اقفل', 'ارفض', 'انهي', 'end call', 'hang up', 'decline'])) {
       await App.obd.bt.endCall();
       return;
     }
@@ -186,28 +158,6 @@ class _DriveModePageState extends State<DriveModePage> {
       }
       return;
     }
-    // Radio.
-    if (has(['وقف الراديو', 'اقفل الراديو', 'stop radio', 'stop the radio'])) {
-      await App.radio.stop();
-      return _say(tr('قفلت الراديو'));
-    }
-    const radioWords = ['راديو', 'اذاعه', 'radio'];
-    if (has(radioWords)) {
-      _show(_Panel.radio);
-      final name = after(radioWords);
-      try {
-        final list = name.isNotEmpty
-            ? await App.radio.search(name)
-            : App.radio.favourites.isNotEmpty
-                ? App.radio.favourites
-                : await App.radio.egypt();
-        if (list.isEmpty) return _say(tr('ما لقيتش المحطة'));
-        await App.radio.play(list.first);
-      } catch (_) {
-        _say(tr('الراديو محتاج نت'));
-      }
-      return;
-    }
     // Readings.
     if (has(['السرعه', 'سرعتي', 'speed'])) {
       return _say(tr('سرعتك ${fmt(v[Pids.speed])} كيلو'));
@@ -229,16 +179,14 @@ class _DriveModePageState extends State<DriveModePage> {
     }
     // Panels.
     if (has(['العدادات', 'gauges'])) return _show(_Panel.gauges);
-    if (has(['الخريطه', 'map'])) return _show(_Panel.map);
     if (has(['الموسيقي', 'الاغاني', 'music'])) return _show(_Panel.music);
 
-    _say(tr('مش فاهم. جرّب: وديني على مكان، اتصل بحد، شغّل الراديو، أو السرعة كام'));
+    _say(tr('مش فاهم. جرّب: وديني على مكان، اتصل بحد، أو السرعة كام'));
   }
 
   /// Hand the trip to Google Maps; this app floats on top with the gauges.
   Future<void> _googleMaps([LatLng? to]) async {
     App.nav.stop(); // avoid two voices giving directions
-    setState(() => _results = null);
     final ok = await App.obd.bt
         .openGoogleMaps(to?.latitude, to?.longitude)
         .catchError((_) => false);
@@ -248,677 +196,15 @@ class _DriveModePageState extends State<DriveModePage> {
     }
   }
 
-  Future<void> _go(Place place) async {
-    final p = _pos;
-    if (p == null) return;
-    setState(() {
-      _results = null;
-      _follow = true;
-    });
-    FocusScope.of(context).unfocus();
-    await App.nav.start(place, LatLng(p.latitude, p.longitude));
-  }
-  final _mapCtl = MapController();
-  StreamSubscription<Position>? _gps;
-  Position? _pos;
-  final List<LatLng> _path = [];
-  bool _follow = true;
-  bool _headingUp = true; // map turns with the car, like Waze
-  double _heading = 0;
-
-  Future<void> _startGps() async {
-    if (_gps == null) {
-      final perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied ||
-          perm == LocationPermission.deniedForever) {
-        return;
-      }
-      _gps = Geolocator.getPositionStream(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.bestForNavigation,
-          distanceFilter: 5,
-        ),
-      ).listen((p) {
-        if (!mounted) return;
-        final at = LatLng(p.latitude, p.longitude);
-        setState(() {
-          _pos = p;
-          if (p.accuracy < 30) _path.add(at);
-        });
-        App.nav.update(at); // turn-by-turn keeps running on any panel
-        if (_map && _follow) {
-          // Zoom out a little at speed so more road ahead is visible.
-          final kmh = p.speed * 3.6;
-          final zoom = kmh > 90 ? 15.5 : kmh > 50 ? 16.5 : 17.5;
-          if (p.speed > 1.5 && !p.heading.isNaN) _heading = p.heading;
-          try {
-            _mapCtl.moveAndRotate(at, zoom, _headingUp ? 360 - _heading : 0);
-          } catch (_) {}
-        }
-      });
-    }
-  }
-
-  Widget _liveMap(BuildContext context, {bool compact = false}) {
-    final p = _pos;
-    final scheme = Theme.of(context).colorScheme;
-    if (p == null) {
-      return Card(
-        child: Center(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const CircularProgressIndicator(),
-            const SizedBox(height: 12),
-            Text(tr('بيدوّر على موقعك…')),
-          ]),
-        ),
-      );
-    }
-    final at = LatLng(p.latitude, p.longitude);
-    final nav = App.nav;
-    final step = nav.next;
-    final s = App.settings;
-    final kmh = App.obd.values[Pids.speed] ?? p.speed * 3.6;
-    final limit = App.road.effectiveLimit;
-    final over = s.speedAlertMode != 'off' && kmh > limit;
-    const wazeBlue = Color(0xFF33CCFF);
-    const wazeNavy = Color(0xFF0A2A4A);
-
-    void recenter() {
-      setState(() => _follow = true);
-      try {
-        _mapCtl.moveAndRotate(at, 17.5, _headingUp ? 360 - _heading : 0);
-      } catch (_) {}
-    }
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: Stack(children: [
-        FlutterMap(
-          mapController: _mapCtl,
-          options: MapOptions(
-            initialCenter: at,
-            initialZoom: 17.5,
-            initialRotation: _headingUp ? 360 - _heading : 0,
-            interactionOptions: const InteractionOptions(
-              flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
-            ),
-            onPositionChanged: (_, byUser) {
-              if (byUser && _follow) setState(() => _follow = false);
-            },
-          ),
-          children: [
-            mapTiles(context),
-            if (nav.route.length > 1)
-              PolylineLayer(polylines: [
-                Polyline(
-                    points: nav.route,
-                    color: wazeBlue,
-                    strokeWidth: 10,
-                    borderColor: const Color(0xFF1565C0),
-                    borderStrokeWidth: 3),
-              ]),
-            MarkerLayer(markers: [
-              for (final c in App.road.cameras)
-                Marker(
-                  point: c.at,
-                  width: 34,
-                  height: 34,
-                  rotate: true,
-                  child: mapPin(const Color(0xFFD32F2F), Icons.camera_alt,
-                      size: 17),
-                ),
-              if (nav.destination != null)
-                Marker(
-                  point: nav.destination!.at,
-                  width: 40,
-                  height: 40,
-                  rotate: true,
-                  child: mapPin(const Color(0xFF2E7D32), Icons.flag, size: 20),
-                ),
-              // The car: a white puck with a bright arrow, pointing the way.
-              Marker(
-                point: at,
-                width: 54,
-                height: 54,
-                child: Transform.rotate(
-                  angle: _heading * math.pi / 180,
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(blurRadius: 8, color: Colors.black38)
-                      ],
-                    ),
-                    child: const Icon(Icons.navigation,
-                        size: 38, color: Color(0xFF1E88E5)),
-                  ),
-                ),
-              ),
-            ]),
-            mapAttribution(),
-          ],
-        ),
-        // Big turn card while navigating, "where to?" otherwise.
-        if (!compact && nav.active && step != null)
-          PositionedDirectional(
-            top: 8,
-            start: 8,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 380),
-              child: Material(
-                color: wazeNavy,
-                borderRadius: BorderRadius.circular(18),
-                elevation: 6,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 10, 18, 10),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(step.icon, size: 52, color: Colors.white),
-                    const SizedBox(width: 12),
-                    Flexible(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(NavService.fmtDist(nav.toNextM),
-                              style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 30,
-                                  fontWeight: FontWeight.w900)),
-                          Text(tr(step.text),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  color: Colors.white70, fontSize: 16)),
-                        ],
-                      ),
-                    ),
-                  ]),
-                ),
-              ),
-            ),
-          )
-        else if (compact)
-          // Head-unit map: search, fuel stations, mute — top right.
-          Positioned(
-            top: 12,
-            right: 12,
-            child: Column(children: [
-              _glassBtn(Icons.search, tr('رايح فين؟'), () => _show(_Panel.map)),
-              const SizedBox(height: 10),
-              _glassBtn(Icons.local_gas_station_outlined, tr('بنزينة قريبة'), () {
-                _show(_Panel.map);
-                _search.text = tr('محطة بنزين');
-                _doSearch(_search.text);
-              }),
-              const SizedBox(height: 10),
-              _glassBtn(
-                  App.settings.voiceAlerts
-                      ? Icons.volume_up_outlined
-                      : Icons.volume_off_outlined,
-                  tr('صوت التنبيهات'),
-                  () => App.settings
-                      .setVoiceAlerts(!App.settings.voiceAlerts)),
-            ]),
-          )
-        else
-          PositionedDirectional(
-            top: 8,
-            start: 8,
-            end: 64,
-            child: Material(
-              elevation: 4,
-              borderRadius: BorderRadius.circular(28),
-              color: scheme.surface,
-              child: TextField(
-                controller: _search,
-                textInputAction: TextInputAction.search,
-                onSubmitted: _doSearch,
-                decoration: InputDecoration(
-                  hintText: tr('رايح فين؟'),
-                  prefixIcon: _searching
-                      ? const Padding(
-                          padding: EdgeInsets.all(12),
-                          child: SizedBox(
-                              width: 18,
-                              height: 18,
-                              child:
-                                  CircularProgressIndicator(strokeWidth: 2)))
-                      : const Icon(Icons.search),
-                  suffixIcon: _results != null
-                      ? IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () => setState(() => _results = null))
-                      : IconButton(
-                          tooltip: tr('افتح Google Maps'),
-                          icon: const Icon(Icons.assistant_navigation),
-                          onPressed: () => _googleMaps()),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-              ),
-            ),
-          ),
-        // Compass: heading-up (map turns with you) or north-up.
-        if (!compact)
-        PositionedDirectional(
-          top: 8,
-          end: 8,
-          child: _roundBtn(
-            tooltip: _headingUp ? tr('الشمال لفوق') : tr('اتجاه السير لفوق'),
-            onTap: () {
-              setState(() => _headingUp = !_headingUp);
-              recenter();
-            },
-            child: Transform.rotate(
-              angle: _headingUp ? -_heading * math.pi / 180 : 0,
-              child: Icon(Icons.navigation,
-                  color: _headingUp ? const Color(0xFFD32F2F) : scheme.onSurface),
-            ),
-          ),
-        ),
-        // Map style (streets / OSM / colourful / satellite).
-        if (!compact)
-        PositionedDirectional(
-          top: 64,
-          end: 8,
-          child: PopupMenuButton<int>(
-            tooltip: tr('شكل الخريطة'),
-            onSelected: (i) => setMapStyle(mapStyles[i].id),
-            itemBuilder: (_) => [
-              for (var i = 0; i < mapStyles.length; i++)
-                CheckedPopupMenuItem(
-                    value: i,
-                    checked: mapStyleIndex.value == i,
-                    child: Text(tr(mapStyles[i].name))),
-            ],
-            child: _roundBtn(
-                onTap: null, child: const Icon(Icons.layers_outlined)),
-          ),
-        ),
-        if (!compact && _results != null && !nav.active)
-          PositionedDirectional(
-            top: 64,
-            start: 8,
-            end: 8,
-            bottom: 8,
-            child: Material(
-              elevation: 3,
-              borderRadius: BorderRadius.circular(14),
-              color: scheme.surface,
-              child: _results!.isEmpty
-                  ? Center(child: Text(tr('ما لقيتش نتايج')))
-                  : ListView(children: [
-                      for (final r in _results!)
-                        ListTile(
-                          leading: const Icon(Icons.place),
-                          title: Text(r.name,
-                              maxLines: 1, overflow: TextOverflow.ellipsis),
-                          subtitle: Text(r.detail,
-                              maxLines: 1, overflow: TextOverflow.ellipsis),
-                          onTap: () => _go(r),
-                          trailing: IconButton.filledTonal(
-                            tooltip: tr('ابدأ في Google Maps'),
-                            icon: const Icon(Icons.assistant_navigation),
-                            onPressed: () => _googleMaps(r.at),
-                          ),
-                        ),
-                    ]),
-            ),
-          ),
-        if (nav.routing) const Center(child: CircularProgressIndicator()),
-        if (nav.error != null)
-          PositionedDirectional(
-            bottom: 90,
-            start: 8,
-            end: 8,
-            child: Card(
-                child: ListTile(
-                    leading: const Icon(Icons.wifi_off),
-                    title: Text(nav.error!))),
-          ),
-        // Speedometer bubble + limit sign, bottom corner (like Waze).
-        if (!compact && (_results == null || nav.active))
-          PositionedDirectional(
-            start: 10,
-            bottom: nav.active ? 82 : 12,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Container(
-                  width: 74,
-                  height: 74,
-                  decoration: BoxDecoration(
-                    color: over ? const Color(0xFFD32F2F) : Colors.white,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                        color: over ? Colors.white : const Color(0xFF263238),
-                        width: 3),
-                    boxShadow: const [
-                      BoxShadow(blurRadius: 8, color: Colors.black38)
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text('${kmh.round()}',
-                          style: TextStyle(
-                              fontSize: 28,
-                              height: 1,
-                              fontWeight: FontWeight.w900,
-                              color: over ? Colors.white : Colors.black87)),
-                      Text(tr('كم/س'),
-                          style: TextStyle(
-                              fontSize: 11,
-                              color: over ? Colors.white : Colors.black54)),
-                    ],
-                  ),
-                ),
-                if (s.speedAlertMode != 'off') ...[
-                  const SizedBox(width: 6),
-                  GestureDetector(
-                    onTap: () => _fixRoadLimit(context),
-                    child: Container(
-                    width: 46,
-                    height: 46,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      border:
-                          Border.all(color: const Color(0xFFD32F2F), width: 5),
-                      boxShadow: const [
-                        BoxShadow(blurRadius: 6, color: Colors.black26)
-                      ],
-                    ),
-                    child: Text('${limit.round()}',
-                        style: const TextStyle(
-                            color: Colors.black,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900)),
-                  ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        // Radar ahead: distance, with "no radar here" to remove a wrong one.
-        if (App.road.nextCamera != null &&
-            (App.road.nextCameraM ?? 9999) <= 1000)
-          PositionedDirectional(
-            top: nav.active ? 96 : 64,
-            start: 8,
-            child: Material(
-              color: const Color(0xFFD32F2F),
-              borderRadius: BorderRadius.circular(22),
-              elevation: 4,
-              child: Padding(
-                padding: const EdgeInsetsDirectional.fromSTEB(12, 2, 2, 2),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  const Icon(Icons.camera_alt, color: Colors.white, size: 18),
-                  const SizedBox(width: 6),
-                  Text(
-                      tr('رادار ${(App.road.nextCameraM! / 10).round() * 10} متر'),
-                      style: const TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.bold)),
-                  TextButton(
-                    onPressed: () =>
-                        App.road.removeCamera(App.road.nextCamera!),
-                    child: Text(tr('مش رادار'),
-                        style: const TextStyle(color: Colors.white70)),
-                  ),
-                ]),
-              ),
-            ),
-          ),
-        // Report a radar at this spot (saved on the phone).
-        if (!compact)
-        PositionedDirectional(
-          end: 10,
-          bottom: (nav.active ? 86 : 14) + (_follow ? 0 : 60),
-          child: FloatingActionButton.small(
-            heroTag: 'addCam',
-            backgroundColor: Colors.white,
-            tooltip: tr('فيه رادار هنا'),
-            onPressed: () async {
-              await App.road.addCameraHere();
-              if (!context.mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text(tr('اتسجّل رادار في المكان ده'))));
-            },
-            child: const Icon(Icons.add_a_photo, color: Color(0xFFD32F2F)),
-          ),
-        ),
-        if (!_follow)
-          PositionedDirectional(
-            end: 10,
-            bottom: nav.active ? 86 : 14,
-            child: FloatingActionButton.extended(
-              heroTag: 'recenter',
-              backgroundColor: Colors.white,
-              foregroundColor: const Color(0xFF1565C0),
-              onPressed: recenter,
-              icon: const Icon(Icons.navigation),
-              label: Text(tr('رجّع الخريطة')),
-            ),
-          ),
-        // Compact: route card bottom-left ("heading to …, arrival, left").
-        if (compact)
-          Positioned(
-            left: 14,
-            bottom: 14,
-            right: 80,
-            child: Align(
-              alignment: Alignment.bottomLeft,
-              child: Material(
-                color: const Color(0xE6162029),
-                borderRadius: BorderRadius.circular(14),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(14),
-                  onTap: () => _show(_Panel.map),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: _huLine)),
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      Flexible(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                                nav.active
-                                    ? tr('الاتجاه إلى ${nav.destination?.name ?? ''}')
-                                    : tr('رايح فين؟'),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold)),
-                            if (nav.active)
-                              Text(
-                                  tr('الوصول: ${_clock(DateTime.now().add(nav.remaining))} • المتبقي: ${nav.remaining.inMinutes} دقيقة'),
-                                  style: const TextStyle(
-                                      color: _huMuted, fontSize: 14)),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Icon(nav.active && step != null ? step.icon : Icons.search,
-                          color: Colors.white, size: 34),
-                    ]),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        // Arrival bar: ETA clock, minutes, km, stop.
-        if (nav.active && !compact)
-          PositionedDirectional(
-            start: 8,
-            end: 8,
-            bottom: 8,
-            child: Material(
-              elevation: 6,
-              borderRadius: BorderRadius.circular(20),
-              color: scheme.surface,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                child: Row(children: [
-                  IconButton.filledTonal(
-                    tooltip: tr('إنهاء'),
-                    style: IconButton.styleFrom(
-                        backgroundColor: const Color(0x22D32F2F)),
-                    onPressed: nav.stop,
-                    icon: Icon(Icons.close, color: AppColors.danger(context)),
-                  ),
-                  Expanded(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          _clock(DateTime.now().add(nav.remaining)),
-                          style: const TextStyle(
-                              fontSize: 26, fontWeight: FontWeight.w900),
-                        ),
-                        const SizedBox(width: 14),
-                        Text(
-                          '${nav.remaining.inMinutes} ${tr('د')}  •  ${NavService.fmtDist(nav.remainingM)}',
-                          style: TextStyle(
-                              fontSize: 16, color: scheme.onSurfaceVariant),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: tr('كمّل في Google Maps'),
-                    icon: const Icon(Icons.assistant_navigation),
-                    onPressed: () => _googleMaps(nav.destination!.at),
-                  ),
-                ]),
-              ),
-            ),
-          ),
-      ]),
-    );
-  }
-
-  // ---------- head-unit home: map + next turn / car + media ----------
+  // ---------- head-unit home: now playing + car status ----------
 
   Widget _dashboard(BuildContext context) {
-    // Map always on the left, cards on the right (like the design).
-    return Row(
-      textDirection: TextDirection.ltr,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Expanded(
-          flex: 11,
-          child: Container(
-            decoration: _huBox(),
-            clipBehavior: Clip.antiAlias,
-            child: _liveMap(context, compact: true),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          flex: 10,
-          child: Directionality(
-            textDirection: Directionality.of(context),
-            child: Column(children: [
-              Expanded(
-                  child: _HeadMediaCard(
-                      onOpen: () => _show(App.radio.current != null
-                          ? _Panel.radio
-                          : _Panel.music))),
-              const SizedBox(height: 12),
-              Expanded(
-                  child: _HeadCarCard(onOpen: () => _show(_Panel.gauges))),
-            ]),
-          ),
-        ),
-      ],
-    );
+    return Column(children: [
+      Expanded(child: _HeadMediaCard(onOpen: () => _show(_Panel.music))),
+      const SizedBox(height: 12),
+      Expanded(child: _HeadCarCard(onOpen: () => _show(_Panel.gauges))),
+    ]);
   }
-
-
-  /// Tap on the limit sign: correct the limit of the road we're on.
-  Future<void> _fixRoadLimit(BuildContext context) async {
-    final road = App.road;
-    if (road.roadId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(tr('مش عارف انت على أنهي طريق دلوقتي'))));
-      return;
-    }
-    final picked = await showDialog<double>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(tr('حد السرعة للطريق ده')),
-        content: Wrap(spacing: 8, runSpacing: 8, children: [
-          for (final v in const [40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0, 120.0])
-            ChoiceChip(
-              label: Text('${v.round()}'),
-              selected: road.roadLimit == v,
-              onSelected: (_) => Navigator.pop(ctx, v),
-            ),
-        ]),
-        actions: [
-          if (road.thisRoadFixed)
-            TextButton(
-                onPressed: () => Navigator.pop(ctx, -1.0),
-                child: Text(tr('رجّع الأصلي'))),
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(tr('إلغاء'))),
-        ],
-      ),
-    );
-    if (picked == null) return;
-    await road.setLimitForThisRoad(picked < 0 ? null : picked);
-    if (mounted) setState(() {});
-  }
-
-  Widget _glassBtn(IconData i, String tip, VoidCallback onTap) => Tooltip(
-        message: tip,
-        child: Material(
-          color: const Color(0xCC1C2733),
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: const BorderSide(color: _huLine)),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: () {
-              HapticFeedback.selectionClick();
-              onTap();
-            },
-            child: SizedBox(
-                width: 50, height: 50, child: Icon(i, color: Colors.white)),
-          ),
-        ),
-      );
-
-  static String _clock(DateTime t) =>
-      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
-
-  Widget _roundBtn(
-          {required Widget child,
-          required VoidCallback? onTap,
-          String? tooltip}) =>
-      Tooltip(
-        message: tooltip ?? '',
-        child: Material(
-          color: Theme.of(context).colorScheme.surface,
-          shape: const CircleBorder(),
-          elevation: 4,
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: onTap,
-            child: SizedBox(width: 48, height: 48, child: Center(child: child)),
-          ),
-        ),
-      );
 
   @override
   void initState() {
@@ -935,7 +221,6 @@ class _DriveModePageState extends State<DriveModePage> {
         [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     WakelockPlus.enable(); // screen stays on only in drive mode
-    _startGps();
     App.road.start();
     App.obd.bt.setPipAllowed(true).catchError((_) {});
   }
@@ -945,8 +230,6 @@ class _DriveModePageState extends State<DriveModePage> {
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     WakelockPlus.disable();
-    _gps?.cancel();
-    _search.dispose();
     App.obd.bt.setPipAllowed(false).catchError((_) {});
     super.dispose();
   }
@@ -1038,7 +321,7 @@ class _DriveModePageState extends State<DriveModePage> {
       backgroundColor: _huBg,
       body: SafeArea(
         child: ListenableBuilder(
-          listenable: Listenable.merge([obd, trips, App.maintenance, App.fuel, s, App.nav, App.road, App.radio]),
+          listenable: Listenable.merge([obd, trips, App.maintenance, App.fuel, s, App.road]),
           builder: (context, _) {
             final v = obd.values;
             final rpm = v[Pids.rpm];
@@ -1093,8 +376,6 @@ class _DriveModePageState extends State<DriveModePage> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         // Speed: the biggest number on screen.
-                        // (Hidden on the map: it goes full width like Waze.)
-                        if (!_map)
                         Expanded(
                           flex: 3,
                           child: Card(
@@ -1196,12 +477,8 @@ class _DriveModePageState extends State<DriveModePage> {
                           flex: 4,
                           child: _panel == _Panel.home
                               ? _dashboard(context)
-                              : _panel == _Panel.map
-                              ? _liveMap(context)
                               : _panel == _Panel.music
                                   ? const MusicPanel()
-                                  : _panel == _Panel.radio
-                                      ? const RadioPanel()
                                   : _panel == _Panel.phone
                                       ? const PhonePanel()
                                       : Column(

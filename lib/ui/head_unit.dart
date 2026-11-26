@@ -227,13 +227,9 @@ class _HeadNav extends StatelessWidget {
       child: Row(children: [
         item(Icons.home_outlined, tr('الرئيسية'), () => onPanel(_Panel.home),
             active: current == _Panel.home),
-        item(Icons.map_outlined, tr('الخرائط'), () => onPanel(_Panel.map),
-            active: current == _Panel.map),
         item(Icons.music_note_outlined, tr('الموسيقى'),
             () => onPanel(_Panel.music),
             active: current == _Panel.music),
-        item(Icons.radio_outlined, tr('الراديو'), () => onPanel(_Panel.radio),
-            active: current == _Panel.radio),
         item(Icons.directions_car_outlined, tr('حالة العربية'),
             () => onPanel(_Panel.gauges),
             active: current == _Panel.gauges),
@@ -247,16 +243,13 @@ class _HeadNav extends StatelessWidget {
   }
 }
 
-/// Now playing: our radio (name, logo, live, favourite) or media keys for
-/// whatever app is playing on the phone.
+/// Now playing: media keys for whatever music app is playing on the phone.
 class _HeadMediaCard extends StatelessWidget {
   final VoidCallback onOpen;
   const _HeadMediaCard({required this.onOpen});
 
   @override
   Widget build(BuildContext context) {
-    final radio = App.radio;
-    final st = radio.current;
     final bt = App.obd.bt;
     Widget ctl(IconData i, VoidCallback f, {bool big = false}) => Material(
           color: Colors.white.withValues(alpha: big ? 0.18 : 0.10),
@@ -273,13 +266,6 @@ class _HeadMediaCard extends StatelessWidget {
                 child: Icon(i, color: Colors.white, size: big ? 34 : 28)),
           ),
         );
-    final art = st != null && st.favicon.isNotEmpty
-        ? Image.network(st.favicon,
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) =>
-                const Icon(Icons.radio, color: Colors.white70, size: 34))
-        : Icon(st != null ? Icons.radio : Icons.music_note,
-            color: Colors.white70, size: 34);
     return Container(
       decoration: _huBox(
         gradient: const LinearGradient(
@@ -300,7 +286,9 @@ class _HeadMediaCard extends StatelessWidget {
                     width: 64,
                     height: 64,
                     color: Colors.black26,
-                    child: Center(child: art)),
+                    child: const Center(
+                        child: Icon(Icons.music_note,
+                            color: Colors.white70, size: 34))),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -308,17 +296,14 @@ class _HeadMediaCard extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(st?.name ?? tr('الموسيقى'),
+                    Text(tr('الموسيقى'),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: Colors.white,
                             fontSize: 20,
                             fontWeight: FontWeight.bold)),
-                    Text(
-                        st != null
-                            ? (radio.loading ? tr('بيحمّل…') : tr('راديو'))
-                            : tr('التطبيق اللي شغال على الموبايل'),
+                    Text(tr('التطبيق اللي شغال على الموبايل'),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(color: Colors.white70)),
@@ -328,40 +313,14 @@ class _HeadMediaCard extends StatelessWidget {
             ]),
           ),
         ),
-        // Live radio has no length: a "live" strip instead of a seek bar.
-        if (st != null && radio.playing)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Row(children: [
-              const Icon(Icons.circle, color: _huAccent, size: 10),
-              const SizedBox(width: 6),
-              Text(tr('مباشر'), style: const TextStyle(color: Colors.white70)),
-              const SizedBox(width: 8),
-              Expanded(
-                  child: Container(
-                      height: 3,
-                      decoration: BoxDecoration(
-                          color: Colors.white70,
-                          borderRadius: BorderRadius.circular(2)))),
-            ]),
-          ),
         Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          if (st != null) ...[
-            ctl(radio.playing ? Icons.pause : Icons.play_arrow,
-                () => radio.playing ? radio.stop() : radio.play(st),
-                big: true),
-            const Spacer(),
-            ctl(radio.isFav(st) ? Icons.favorite : Icons.favorite_border,
-                () => radio.toggleFav(st)),
-          ] else ...[
-            ctl(Icons.skip_previous, () => bt.mediaKey('prev').catchError((_) {})),
-            const SizedBox(width: 12),
-            ctl(Icons.play_arrow,
-                () => bt.mediaKey('play_pause').catchError((_) {}),
-                big: true),
-            const SizedBox(width: 12),
-            ctl(Icons.skip_next, () => bt.mediaKey('next').catchError((_) {})),
-          ],
+          ctl(Icons.skip_previous, () => bt.mediaKey('prev').catchError((_) {})),
+          const SizedBox(width: 12),
+          ctl(Icons.play_arrow,
+              () => bt.mediaKey('play_pause').catchError((_) {}),
+              big: true),
+          const SizedBox(width: 12),
+          ctl(Icons.skip_next, () => bt.mediaKey('next').catchError((_) {})),
         ]),
       ]),
     );
